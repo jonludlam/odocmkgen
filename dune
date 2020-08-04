@@ -2,8 +2,3 @@
  (public_name odocmkgen)
  (modules odocmkgen)
  (libraries astring compiler-libs.common unix fpath result mkgen cmdliner))
-
-(executable
- (public_name odoclinkmkgen)
- (modules odoclinkmkgen)
- (libraries astring compiler-libs.common unix fpath result mkgen))

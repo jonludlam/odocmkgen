@@ -49,9 +49,9 @@ default: generate
 compile: odocs
 link: compile Makefile.link odocls
 Makefile.compile:
-	~/devel/odocmkgen/_build/default/odocmkgen.exe compile > Makefile.compile
-Makefile.link: Makefile.compile compile
-	~/devel/odocmkgen/_build/default/odocmkgen.exe link > Makefile.link
+	odocmkgen compile > Makefile.compile
+Makefile.link: Makefile.compile
+	odocmkgen link > Makefile.link
 generate: link
 odocs:
 	mkdir odocs
@@ -75,7 +75,7 @@ module Compile = struct
 
   let compile () =
     let root = read_lib_dir () in
-    Compile.run root
+    Compile.run [root]
 
   let cmd = Term.(const compile $ const ())
 
