@@ -14,53 +14,25 @@ let read_lib_dir () =
 
 
 
-
-(* let resolve_deps extra_threads packages infos =
-  List.map (fun info ->
-    if not (List.exists (fun dep -> dep.dep_digest = None) info.deps)
-    then info
-    else begin
-      let pkgs = List.filter (fun pkg -> pkg.Findlib.dir = info.dir) packages in
-      if List.length pkgs > 1 then Format.eprintf "More than one package for %s [%s]\n%!" info.name (String.concat ", " (List.map (fun pkg -> pkg.Findlib.package) pkgs));
-      let dirs = List.fold_left (fun acc d -> d.Findlib.dependencies @ acc) [] pkgs in
-      let deps = List.map (fun dep ->
-        if dep.dep_digest = None
-        then begin
-          let resolved = List.filter (fun i -> List.mem i.dir (info.dir :: extra_threads :: dirs) && i.name = dep.dep_unit_name) infos in
-          if List.length resolved = 0 then begin
-            Format.printf "%s (%a): can't resolve %s\n%!" info.name Fpath.pp info.dir dep.dep_unit_name;
-            Format.printf "search dirs: (%d) %a\n" (List.length (info.dir :: dirs)) (Findlib.list Fpath.pp) (info.dir :: dirs);
-            List.iter (fun i -> Format.printf "%a\n%!" Fpath.pp i.path) (List.filter (fun i -> List.mem i.dir (info.dir::dirs)) infos);
-            exit 1
-          end;
-          { dep with dep_digest = Some (List.hd resolved).digest }
-        end
-        else dep) info.deps in
-      {info with deps}
-    end
-  ) infos *)
-
-
 module Default = struct
     let default () =
       Format.printf {|
 default: generate
-.PHONY: compile link generate clean
+.PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile Makefile.link odocls
-Makefile.compile:
-	odocmkgen compile > Makefile.compile
-Makefile.link: Makefile.compile
-	odocmkgen link > Makefile.link
+Makefile.gen : Makefile
+	odocmkgen compile
 generate: link
 odocs:
 	mkdir odocs
 odocls:
 	mkdir odocls
 clean:
-	rm -rf odocs odocls html Makefile.link Makefile.compile
-include Makefile.compile
-include Makefile.link
+	rm -rf odocs odocls html latex man Makefile.*link Makefile.gen Makefile.*generate
+ifneq ($(MAKECMDGOALS),clean)
+-include Makefile.gen
+endif
 |}
       
   let cmd =
@@ -83,17 +55,37 @@ module Compile = struct
 end
 
 module Link = struct
-  let link () =
-    Link.run (Fpath.v "odocs")
+  let link package =
+    Link.run (Fpath.v "odocs") package
 
-  let cmd = Term.(const link $ const ())
+  let package =
+    let doc = "Select the package to examine" in
+    Arg.(required & opt (some string) None & info ["p"; "package"]
+            ~docv:"PKG" ~doc)
+    
+  let cmd = Term.(const link $ package)
 
   let info = Term.info "link" ~doc:"Produce a makefile for linking odoc files"
   
 end
 
+module Generate = struct
+  let generate package =
+    Generate.run (Fpath.v "odocls") package
+
+  let package =
+    let doc = "Select the package to examine" in
+    Arg.(required & opt (some string) None & info ["p"; "package"]
+            ~docv:"PKG" ~doc)
+    
+  let cmd = Term.(const generate $ package)
+
+  let info = Term.info "generate" ~doc:"Produce a makefile for generating outputs from odoc files"
+  
+end
+
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info)] with
+  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info)] with
   | `Error _ ->
     Format.pp_print_flush Format.err_formatter ();
     exit 2

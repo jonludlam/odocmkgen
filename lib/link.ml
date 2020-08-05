@@ -11,30 +11,39 @@ let is_hidden x =
   in
   is_hidden (Fpath.basename x)
 
-let paths_of_package all_files package =
-  let all_paths =
-    all_files >>= fun file ->
+let filter_by_package all_files package =
+  List.filter (fun file ->
     match Fpath.(segs (normalize file)) with
-    | "odocs" :: pkg :: _ when pkg = package -> [fst (Fpath.split_base file)]
-    | _ -> []
-  in
-  setify all_paths
+    | "odocs" :: pkg :: _ when pkg = package -> true
+    | _ -> false) all_files
 
-let run path =
+let get_dir f = fst (Fpath.split_base f)
+  
+let paths_of_package all_files package =
+  let package_files = filter_by_package all_files package in
+  let dirs = List.map get_dir package_files in
+  setify dirs
+
+let run toppath package =
+    let package_makefile = Printf.sprintf "Makefile.%s.link" package in
+
     (* Find all odoc files, result is list of Fpath.t with no extension *)
-    let all_files = Inputs.find_files ["odoc"] path in
+    let all_files = Inputs.find_files ["odoc"] toppath in
+
+    let pkg_files = filter_by_package all_files package in 
 
     (* Filter out only non-hidden files *)
-    let files = all_files >>= filter (fun f -> not (is_hidden f)) in
+    let files = pkg_files >>= filter (fun f -> not (is_hidden f)) in
 
     (* Find the set of directories that contain all of the files *)
-    let dirs = Fpath.Set.of_list (List.map (fun f -> fst (Fpath.split_base f)) all_files) in
+    let dirs = Fpath.Set.of_list (List.map (fun f -> fst (Fpath.split_base f)) pkg_files) in
 
     (* For each directory, use odoc to find the union of the set of packages each odoc file requires *)
     let odoc_deps = Fpath.Set.fold (fun dir acc -> Fpath.Map.add dir (Odoc.link_deps dir) acc) dirs Fpath.Map.empty in
 
-    Format.printf "default: link\n%!";
-    List.iter (fun file ->
+    let oc = open_out package_makefile in
+
+    let output_files = List.map (fun file ->
       (* The directory containing the odoc file *)
       let dir = fst (Fpath.split_base file) in
 
@@ -42,7 +51,7 @@ let run path =
       let deps = Option.get @@ Fpath.Map.find dir odoc_deps in
 
       (* Extract the packages and remove duplicates *)
-      let dep_packages = setify @@ List.map (fun dep -> dep.Odoc.package) deps in
+      let dep_packages = setify @@ List.map (fun dep -> dep.Odoc.l_package) deps in
 
       (* Find the directories that contain these packages - note the mapping of package -> 
          directory is one-to-many *)
@@ -51,6 +60,10 @@ let run path =
         let deps = List.filter (fun file -> fst (Fpath.split_base file) = dir) all_files in
         List.iter (fun dep ->
           Format.printf "%a.odocl : %a.odoc\n%!" Fpath.pp file Fpath.pp dep) deps) dirs; *)
+      
+      (* Use the existence of the Makefile.<package>.link as existence proof that all of the package's odoc files have been compiled *)
+      let _makefiles = List.map (fun package -> Printf.sprintf "Makefile.%s.link" package) dep_packages in
+
       let output_file = match Fpath.segs file with
       | "odocs" :: rest -> Fpath.(v (String.concat dir_sep ("odocls" :: rest)))
       | path :: _ -> Format.eprintf "odoc file unexpectedly found in path %s\n%!" path;
@@ -58,22 +71,17 @@ let run path =
       | _ -> Format.eprintf "Something odd happening with the odoc paths\n%!";
         exit 1
       in
-      Format.printf "%a.odocl : %a.odoc\n\todoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
-        Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
-        (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
-        Fpath.pp output_file;
-      Format.printf "generate : %a.odocl\n"
-        Fpath.pp output_file
-      ) files;
-    Format.printf "generate:\n";
-    List.iter (fun file ->
-      let output_file = match Fpath.segs file with
-      | "odocs" :: rest -> Fpath.(v (String.concat dir_sep ("odocls" :: rest)))
-      | path :: _ -> Format.eprintf "odoc file unexpectedly found in path %s\n%!" path;
-        exit 1
-      | _ -> Format.eprintf "Something odd happening with the odoc paths\n%!";
-        exit 1
+      let str =
+        Format.asprintf "%a.odocl : %a.odoc %s\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
+          Fpath.pp output_file Fpath.pp file (String.concat " " [] (* makefiles *)) Fpath.pp file Fpath.pp output_file
+          (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
+          Fpath.pp output_file
       in
-      Format.printf "\todoc generate %a.odocl --output-dir html\n" Fpath.pp output_file
-    ) files
+
+      Printf.fprintf oc "%s" str;
+      output_file
+      ) files in
+    Printf.fprintf oc "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n" package (String.concat " " (List.map (fun f -> Fpath.(to_string (add_ext "odocl" f))) output_files)) package;
+    Printf.fprintf oc "-include Makefile.%s.generate\n" package;
+    close_out oc
     
