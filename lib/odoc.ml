@@ -45,7 +45,7 @@ let link_deps dir =
       [{l_package; l_name; l_digest}]
     | _ -> []
   in
-  lines_of_process (Format.asprintf "odoc html-deps %a" Fpath.pp dir)
+  lines_of_process (Format.asprintf "odoc link-deps %a" Fpath.pp dir)
   >>= process_line
 
 let generate_targets odocl ty =
