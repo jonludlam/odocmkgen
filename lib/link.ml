@@ -1,3 +1,5 @@
+(* Generate the Makefile.<package>.link files *)
+
 open Listm
 
 let is_hidden x =
@@ -65,7 +67,7 @@ let run toppath package =
           exit 1
       in
       let str =
-        Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
+        Format.asprintf "%a.odocl : %a.odoc\n\ttime odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
           Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
           (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
           Fpath.pp output_file

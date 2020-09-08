@@ -15,14 +15,14 @@ let read_lib_dir () =
 
 
 module Default = struct
-    let default () =
+    let default whitelist =
       Format.printf {|
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile Makefile.link odocls
 Makefile.gen : Makefile
-	odocmkgen compile
+	odocmkgen compile -w %s
 generate: link
 odocs:
 	mkdir odocs
@@ -33,10 +33,13 @@ clean:
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|}
-      
+|} (String.concat "," whitelist)
+
+  let whitelist =
+    Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
+  
   let cmd =
-    Term.(const default $ const ())
+    Term.(const default $ whitelist)
   
   let info =
     Term.info ~version:"%%VERSION%%" "odocmkgen"
@@ -45,11 +48,14 @@ end
 
 module Compile = struct
 
-  let compile () =
+  let compile whitelist =
     let root = read_lib_dir () in
-    Compile.run [root]
+    Compile.run whitelist [root]
 
-  let cmd = Term.(const compile $ const ())
+  let whitelist =
+    Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
+
+  let cmd = Term.(const compile $ whitelist)
 
   let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
 end
