@@ -3,26 +3,41 @@
 open Mkgen
 open Cmdliner
 
+(** Example: [conv_compose Fpath.of_string Fpath.to_string Arg.dir] *)
+let conv_compose ?docv parse to_string c =
+  let open Arg in
+  let docv = match docv with Some v -> v | None -> conv_docv c in
+  let parse v =
+    match conv_parser c v with
+    | Ok x -> parse x
+    | Error _ as e -> e
+  and print fmt t = conv_printer c fmt (to_string t) in
+  conv ~docv (parse, print)
 
 (* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
 let read_lib_dir () =
   let ic = Unix.open_process_in "ocamlfind printconf path" in
-  let base_dir = input_line ic |> Fpath.of_string in
-  match Unix.close_process_in ic, base_dir with
-  | Unix.WEXITED 0, Ok p -> p
+  let base_dir = input_line ic in
+  match Unix.close_process_in ic with
+  | Unix.WEXITED 0 -> base_dir
   | _ -> Format.eprintf "Failed to find ocaml lib path"; exit 1
 
 
 
 module Default = struct
-    let default whitelist =
+    let default whitelist lib_dir =
+      let lib_dir =
+        match lib_dir with
+        | Some lib_dir -> lib_dir
+        | None -> read_lib_dir ()
+      in
       Format.printf {|
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile Makefile.link odocls
 Makefile.gen : Makefile
-	odocmkgen compile -w %s
+	odocmkgen compile -w %s %S
 generate: link
 odocs:
 	mkdir odocs
@@ -33,29 +48,40 @@ clean:
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|} (String.concat "," whitelist)
+|} (String.concat "," whitelist) lib_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
-  
+
+  let lib_dir =
+    let doc =
+      "Path to libraries. If not set, defaults to the global environment by \
+       querying $(b,ocamlfind)."
+    in
+    (* [some string] and not [some dir] because we don't need it to exist yet. *)
+    Arg.(value & pos 0 (some string) None & info [] ~doc ~docv:"LIB_DIR")
+
   let cmd =
-    Term.(const default $ whitelist)
-  
+    Term.(const default $ whitelist $ lib_dir)
+
   let info =
     Term.info ~version:"%%VERSION%%" "odocmkgen"
-  
 end
 
 module Compile = struct
 
-  let compile whitelist =
-    let root = read_lib_dir () in
-    Compile.run whitelist [root]
+  let compile whitelist lib_dir =
+    Compile.run whitelist [lib_dir]
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
 
-  let cmd = Term.(const compile $ whitelist)
+  let lib_dir =
+    let doc = "Path to libraries." in
+    let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
+    Arg.(required & pos 0 (some fpath_dir) None & info [] ~doc ~docv:"LIB_DIR")
+
+  let cmd = Term.(const compile $ whitelist $ lib_dir)
 
   let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
 end
