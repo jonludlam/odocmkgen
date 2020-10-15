@@ -31,13 +31,17 @@ module Default = struct
         | Some lib_dir -> lib_dir
         | None -> read_lib_dir ()
       in
+      let pp_whitelist fmt = function
+        | [] -> ()
+        | wl -> Format.fprintf fmt " -w %s" (String.concat "," wl)
+      in
       Format.printf {|
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile Makefile.link odocls
 Makefile.gen : Makefile
-	odocmkgen compile -w %s %S
+	odocmkgen compile%a %S
 generate: link
 odocs:
 	mkdir odocs
@@ -48,7 +52,7 @@ clean:
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|} (String.concat "," whitelist) lib_dir
+|} pp_whitelist whitelist lib_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
