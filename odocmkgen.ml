@@ -120,8 +120,25 @@ module Generate = struct
   
 end
 
+module OpamDeps = struct
+  let deps () = 
+    let pkgs = Opam.all_opam_packages () in
+    let deps = List.map Opam.calc_deps pkgs in
+    List.iter2 (fun pkg deps ->
+      let oc = open_out (Format.asprintf "%a" Opam.pp_package pkg) in
+      let pp = Format.formatter_of_out_channel oc in
+      Opam.S.iter (fun pkg -> Format.fprintf pp "%a\n%!" Opam.pp_package pkg) deps;
+      close_out oc
+      ) pkgs deps
+
+  let cmd = Term.(const deps $ const ())
+
+  let info = Term.info "deps" ~doc:"Lists the transitive closure of the deps of the specified package"
+
+end
+
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info)] with
+  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info); OpamDeps.(cmd, info)] with
   | `Error _ ->
     Format.pp_print_flush Format.err_formatter ();
     exit 2

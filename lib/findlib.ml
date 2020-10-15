@@ -7,20 +7,7 @@
     dependencies : Fpath.t list;
   }
 
-  let lines_of_process p =
-    let ic = Unix.open_process_in p in
-    let lines = Fun.protect
-      ~finally:(fun () -> ignore(Unix.close_process_in ic))
-      (fun () ->
-        let rec inner acc =
-          try
-            let l = input_line ic in
-            inner (l::acc)
-          with End_of_file -> List.rev acc
-        in inner [])
-    in
-    lines
-
+  
   let find_all_packages () =
     let get_package line =
       try
@@ -28,14 +15,14 @@
         [List.hd xs]
       with _ -> []
     in
-    lines_of_process "ocamlfind list" >>= get_package
+    Util.lines_of_process "ocamlfind list" >>= get_package
   
   let get_package_info package =
-    let dir_res = lines_of_process ("ocamlfind query " ^ package) |> List.hd |> Fpath.of_string in
+    let dir_res = Util.lines_of_process ("ocamlfind query " ^ package) |> List.hd |> Fpath.of_string in
     match dir_res with
     | Ok dir ->
       let dependencies =
-        lines_of_process ("ocamlfind query -recursive " ^ package) >>= fun x -> match Fpath.of_string x with | Ok p when dir <> p -> [p] | _ -> [] 
+        Util.lines_of_process ("ocamlfind query -recursive " ^ package) >>= fun x -> match Fpath.of_string x with | Ok p when dir <> p -> [p] | _ -> [] 
       in
       {package; dir; dependencies}
     | Error (`Msg m) ->
