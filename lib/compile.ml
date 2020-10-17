@@ -80,7 +80,7 @@ let compile_fragment all_infos info =
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
-    Format.asprintf "\t/usr/bin/time -l odoc compile --package %s $< %s -o %a" info.package include_str Fpath.pp odoc_path;
+    Format.asprintf "\t@odoc compile --package %s $< %s -o %a &> /dev/null" info.package include_str Fpath.pp odoc_path;
     Format.asprintf "compile : %a" Fpath.pp odoc_path;
     Format.asprintf "Makefile.link : %a" Fpath.pp odoc_path ]
 
@@ -94,7 +94,7 @@ let link_fragment all_infos =
       let odocs = String.concat " " (List.map (fun info -> odoc_file_of_info info |> Fpath.to_string) infos) in
       [ Format.asprintf "-include Makefile.%s.link" package;
         Format.asprintf "Makefile.%s.link: %s" package odocs;
-        Format.asprintf "\t@odocmkgen link --package %s" package ]        
+        Format.asprintf "\t@odocmkgen link --package %s &> /dev/null" package ]        
     ) packages
 
 let run whitelist roots =

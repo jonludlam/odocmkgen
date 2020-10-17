@@ -28,12 +28,15 @@ module Default = struct
     let default whitelist lib_dir =
       let lib_dir =
         match lib_dir with
-        | Some lib_dir -> lib_dir
-        | None -> read_lib_dir ()
+        | [] -> [read_lib_dir ()]
+        | _ -> lib_dir
       in
       let pp_whitelist fmt = function
         | [] -> ()
         | wl -> Format.fprintf fmt " -w %s" (String.concat "," wl)
+      in
+      let pp_libdir fmt l =
+        List.iter (fun lib -> Format.fprintf fmt " -L %s" lib) l
       in
       Format.printf {|
 default: generate
@@ -41,7 +44,7 @@ default: generate
 compile: odocs
 link: compile Makefile.link odocls
 Makefile.gen : Makefile
-	odocmkgen compile%a %S
+	odocmkgen compile%a%a &> /dev/null
 generate: link
 odocs:
 	mkdir odocs
@@ -49,10 +52,13 @@ odocls:
 	mkdir odocls
 clean:
 	rm -rf odocs odocls html latex man Makefile.*link Makefile.gen Makefile.*generate
+html: html/odoc.css
+html/odoc.css:
+	odoc support-files --output-dir html
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|} pp_whitelist whitelist lib_dir
+|} pp_whitelist whitelist pp_libdir lib_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
@@ -63,7 +69,7 @@ endif
        querying $(b,ocamlfind)."
     in
     (* [some string] and not [some dir] because we don't need it to exist yet. *)
-    Arg.(value & pos 0 (some string) None & info [] ~doc ~docv:"LIB_DIR")
+    Arg.(value & opt_all (string) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
   let cmd =
     Term.(const default $ whitelist $ lib_dir)
@@ -75,15 +81,19 @@ end
 module Compile = struct
 
   let compile whitelist lib_dir =
-    Compile.run whitelist [lib_dir]
+    Compile.run whitelist lib_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
 
-  let lib_dir =
-    let doc = "Path to libraries." in
-    let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
-    Arg.(required & pos 0 (some fpath_dir) None & info [] ~doc ~docv:"LIB_DIR")
+    let lib_dir =
+      let doc =
+        "Path to libraries. If not set, defaults to the global environment by \
+         querying $(b,ocamlfind)."
+      in
+      let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
+      (* [some string] and not [some dir] because we don't need it to exist yet. *)
+      Arg.(value & opt_all (fpath_dir) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
   let cmd = Term.(const compile $ whitelist $ lib_dir)
 
