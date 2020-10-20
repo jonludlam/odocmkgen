@@ -23,7 +23,7 @@ let run path package =
       (fun f ->
         let str_format = match format with | `Html -> "html" | `Latex -> "latex" | `Man -> "man" in
         let targets = Odoc.generate_targets f format in
-        let str = Format.asprintf "%s &: %a\n\todoc %s-generate %a --output-dir %s &> /dev/null\n" (String.concat " " targets) Fpath.pp f str_format Fpath.pp f str_format in
+        let str = Format.asprintf "%s &: %a\n\todoc %s-generate %a --output-dir %s\n" (String.concat " " targets) Fpath.pp f str_format Fpath.pp f str_format in
         Printf.fprintf oc "%s" str;
         let str = Format.asprintf "%s : %s\n" str_format (String.concat " " targets) in
         Printf.fprintf oc "%s" str

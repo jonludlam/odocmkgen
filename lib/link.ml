@@ -67,7 +67,7 @@ let run toppath package =
           exit 1
       in
       let str =
-        Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s &>/dev/null \nlink: %a.odocl\n%!"
+        Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
           Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
           (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
           Fpath.pp output_file
@@ -76,7 +76,7 @@ let run toppath package =
       Printf.fprintf oc "%s" str;
       output_file
       ) files in
-    Printf.fprintf oc "Makefile.%s.generate: %s\n\todocmkgen generate --package %s &> /dev/null\n" package (String.concat " " (List.map (fun f -> Fpath.(to_string (add_ext "odocl" f))) output_files)) package;
+    Printf.fprintf oc "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n" package (String.concat " " (List.map (fun f -> Fpath.(to_string (add_ext "odocl" f))) output_files)) package;
     Printf.fprintf oc "-include Makefile.%s.generate\n" package;
     close_out oc
     

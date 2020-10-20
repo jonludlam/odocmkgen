@@ -44,7 +44,7 @@ default: generate
 compile: odocs
 link: compile odocls
 Makefile.gen : Makefile
-	odocmkgen compile%a%a &> /dev/null
+	odocmkgen compile%a%a
 generate: link
 odocs:
 	mkdir odocs
