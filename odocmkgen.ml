@@ -42,7 +42,7 @@ module Default = struct
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
-link: compile Makefile.link odocls
+link: compile odocls
 Makefile.gen : Makefile
 	odocmkgen compile%a%a &> /dev/null
 generate: link
