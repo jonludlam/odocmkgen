@@ -18,13 +18,29 @@ let deps_of_opam_result =
 
 let opam_deps package =
   let open Listm in
+  if package.name = "ocaml" then [] else
   let cmd = Format.asprintf "opam list --required-by %a --columns=name,version --color=never --short" pp_package package in
   Util.lines_of_process cmd >>= deps_of_opam_result
+
+module H2 = Hashtbl.Make(struct type t = string let equal x y = x = y let hash x = Hashtbl.hash x end)
+
+let packages = H2.create 111
 
 let all_opam_packages () =
   let open Listm in
   let cmd = "opam list --columns=name,version --color=never --short" in
-  Util.lines_of_process cmd >>= deps_of_opam_result
+  let result = Util.lines_of_process cmd >>= deps_of_opam_result in
+  List.iter (fun result -> H2.add packages result.name result) result;
+  result
+
+let find_package name =
+  if H2.length packages = 0 then ignore (all_opam_packages ());
+  try
+    H2.find packages name
+  with Not_found ->
+    Format.eprintf "Erk: %s not found!\n%!" name;
+    raise Not_found
+
 
 let rec calc_deps package =
   if H.mem dependencies package
@@ -36,5 +52,11 @@ let rec calc_deps package =
     H.add dependencies package all_deps;
     all_deps
   end
+
+let hashed_deps package =
+  let deps = calc_deps package in
+  let s = S.to_seq deps in
+  let str = Seq.fold_left (fun acc p -> Format.asprintf "%s\n%a" acc pp_package p) "" s in
+  Digest.to_hex (Digest.string str)
 
 

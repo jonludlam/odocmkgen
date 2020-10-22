@@ -16,7 +16,7 @@ let is_hidden x =
 let filter_by_package all_files package =
   List.filter (fun file ->
     match Fpath.(segs (normalize file)) with
-    | "odocs" :: pkg :: _ when pkg = package -> true
+    | "odocs" :: _universes :: _universe :: pkg :: _version :: _ :: _ when pkg = package -> true
     | _ -> false) all_files
 
 let get_dir f = fst (Fpath.split_base f)
@@ -35,11 +35,18 @@ let run toppath package =
     (* get rid of hidden files *)
     let files = pkg_files >>= filter (fun f -> not (is_hidden f)) in
 
+    Format.eprintf "Files under consideration: %d %a\n%!" (List.length files) (Format.pp_print_list Fpath.pp ) files;
+
     (* Find the set of directories that contain all of the files *)
     let dirs = Fpath.Set.of_list (List.map (fun f -> fst (Fpath.split_base f)) pkg_files) in
 
+    Format.eprintf "Dirs under consideration: %d\n%!" (Fpath.Set.cardinal dirs);
+
     (* For each directory, use odoc to find the union of the set of packages each odoc file requires *)
     let odoc_deps = Fpath.Set.fold (fun dir acc -> Fpath.Map.add dir (Odoc.link_deps dir) acc) dirs Fpath.Map.empty in
+
+    Format.eprintf "odoc_deps: %a\n%!"
+      (Fpath.Map.pp (fun fmt (path,packages) -> Format.fprintf fmt "@[<v>dir: %a@,[@[<v>%a@]]@]" Fpath.pp path (Format.pp_print_list ~pp_sep:Format.pp_print_cut Odoc.pp_link_dep) packages)) odoc_deps;
 
     let package_makefile = Printf.sprintf "Makefile.%s.link" package in
 
@@ -55,6 +62,7 @@ let run toppath package =
       (* Extract the packages and remove duplicates *)
       let dep_packages = setify @@ List.map (fun dep -> dep.Odoc.l_package) deps in
 
+      Format.eprintf "dep packages: [%s]\n%!" (String.concat "," dep_packages);
       (* Find the directories that contain these packages - note the mapping of package -> 
          directory is one-to-many *)
       let dirs = setify @@ dep_packages >>= fun package -> paths_of_package all_files package in

@@ -14,6 +14,9 @@ type link_dep = {
   l_digest : Digest.t;
 }
 
+let pp_link_dep fmt l =
+  Format.fprintf fmt "{ %s %s }" l.l_package l.l_name
+
 let lines_of_process p =
   let ic = Unix.open_process_in p in
   let lines = Fun.protect
@@ -40,9 +43,14 @@ let compile_deps file =
 
 let link_deps dir =
   let process_line line =
+    Format.eprintf "line: %s\n%!" line;
     match Astring.String.cuts ~sep:" " line with
-    | [l_package; l_name; l_digest] ->
+    | [parent_path; l_name; l_digest] -> begin
+      match Astring.String.cuts ~sep:"/" parent_path with
+      | "universes" :: _universe :: l_package :: _version :: _ ->
       [{l_package; l_name; l_digest}]
+      | _ -> []
+      end
     | _ -> []
   in
   lines_of_process (Format.asprintf "odoc link-deps %a" Fpath.pp dir)
