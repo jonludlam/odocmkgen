@@ -62,8 +62,9 @@ let get_info root mod_file =
   let (dir, fname) = Fpath.split_base relpath in
   let package_name = package_of_relpath relpath in
   try
-    let package = Opam.find_package package_name in
-    let universe = Opam.hashed_deps package in
+    let dep_universe = Universe.Current.dep_universe package_name in
+    let (package, universe) = dep_universe in
+    let universe = universe.Universe.id in
     match List.partition (fun d -> d.Odoc.c_unit_name = name) deps with
     | [self], deps ->
       let digest = self.c_digest in
@@ -84,7 +85,7 @@ let is_blessed info =
 
 let pp_mlchild fmt = function | CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
 
-let overall_basedir = Fpath.v "odocs"
+let overall_basedir = Fpath.v "."
 
 let set_child parent child =
   let p = Hashtbl.find pages parent.mld in
@@ -240,7 +241,7 @@ let run whitelist roots =
     else infos
   in
   let infos =
-    List.filter (fun info -> try ignore (Opam.find_package info.package.name); true with _ -> false) infos
+    List.filter (fun info -> try ignore (Universe.Current.dep_universe info.package.name); true with _ -> false) infos
   in
   let lines = List.concat (List.map (compile_fragment infos) infos) in
   let oc = open_out "Makefile.gen" in
