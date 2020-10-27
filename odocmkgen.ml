@@ -25,7 +25,8 @@ let read_lib_dir () =
 
 
 module Default = struct
-    let default whitelist lib_dir =
+    let default whitelist lib_dir switch =
+      Opam.switch := switch;
       let lib_dir =
         match lib_dir with
         | [] -> [read_lib_dir ()]
@@ -38,13 +39,16 @@ module Default = struct
       let pp_libdir fmt l =
         List.iter (fun lib -> Format.fprintf fmt " -L %s" lib) l
       in
+      let pp_switch fmt s =
+        match s with | None -> () | Some s -> Format.fprintf fmt " -s %s" s
+      in
       Format.printf {|
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile odocls
 Makefile.gen : Makefile
-	odocmkgen compile%a%a
+	odocmkgen compile%a%a%a
 generate: link
 odocs:
 	mkdir odocs
@@ -58,7 +62,7 @@ html/odoc.css:
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|} pp_whitelist whitelist pp_libdir lib_dir
+|} pp_whitelist whitelist pp_libdir lib_dir pp_switch switch
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
@@ -71,8 +75,14 @@ endif
     (* [some string] and not [some dir] because we don't need it to exist yet. *)
     Arg.(value & opt_all (string) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
+  let switch =
+    let doc =
+      "Opam switch to use. If not set, defaults to the current switch"
+    in
+    Arg.(value & opt (some string) None & info ["s"; "switch"] ~doc ~docv:"SWITCH")
+  
   let cmd =
-    Term.(const default $ whitelist $ lib_dir)
+    Term.(const default $ whitelist $ lib_dir $ switch)
 
   let info =
     Term.info ~version:"%%VERSION%%" "odocmkgen"
@@ -80,7 +90,8 @@ end
 
 module Compile = struct
 
-  let compile whitelist lib_dir =
+  let compile whitelist lib_dir switch =
+    Opam.switch := switch;
     Compile.run whitelist lib_dir
 
   let whitelist =
@@ -95,7 +106,7 @@ module Compile = struct
       (* [some string] and not [some dir] because we don't need it to exist yet. *)
       Arg.(value & opt_all (fpath_dir) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
-  let cmd = Term.(const compile $ whitelist $ lib_dir)
+  let cmd = Term.(const compile $ whitelist $ lib_dir $ Default.switch)
 
   let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
 end

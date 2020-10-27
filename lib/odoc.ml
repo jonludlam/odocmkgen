@@ -49,6 +49,8 @@ let link_deps dir =
       match Astring.String.cuts ~sep:"/" parent_path with
       | "universes" :: _universe :: l_package :: _version :: _ ->
       [{l_package; l_name; l_digest}]
+      | "packages" :: l_package :: _version :: _ ->
+      [{l_package; l_name; l_digest}]
       | _ -> []
       end
     | _ -> []

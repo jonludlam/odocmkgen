@@ -14,18 +14,14 @@ type source_info = {
 }
 
 type mldchild =
-  | Mld of trio
+  | Mld of Fpath.t
   | CU of source_info
 
-and trio = {
+and mld = {
   mldname : string;
   dir: Fpath.t;
   mld: Fpath.t;
   odoc: Fpath.t;
-}
-
-and mld = {
-  trio : trio;
   children : mldchild list;
   parent : Fpath.t option;
   title : string;
@@ -81,67 +77,80 @@ let get_info root mod_file =
 (* Returns the relative path to an odoc file based on an input file. For example, given
    `/home/opam/.opam/4.10.0/lib/ocaml/compiler-libs/lambda.cmi` it will return
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
+let pages = Hashtbl.create 100
 
-let is_blessed _info = false
-  (* info.universe = "30a0cfe8de96bdcfb17671db3cbd15ed" && info.package.name = "jsonm" && info.package.version = "1.0.1" *)
-  
+let is_blessed info =
+  info.universe = "d41d8cd98f00b204e9800998ecf8427e" && info.package.name = "ocaml" && info.package.version = "4.11.1"
 
-let subdir_mld_odoc basedir name =
-  { mldname = name;
-    dir = Fpath.(basedir // v name);
-    mld = Fpath.(basedir // v (Printf.sprintf "%s.mld" name));
-    odoc = Fpath.(basedir // v (Printf.sprintf "page-%s.odoc" name)) }
+let pp_mlchild fmt = function | CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
 
-let universes_trio = subdir_mld_odoc (Fpath.(v "odocs")) "universes"
+let overall_basedir = Fpath.v "odocs"
 
-let packages_trio =
-  subdir_mld_odoc Fpath.(v "odocs") "packages"
+let set_child parent child =
+  let p = Hashtbl.find pages parent.mld in
+  Format.eprintf "Setting parent: %a to have child: %a\n%!" Fpath.pp parent.mld pp_mlchild child;
+  if not (List.mem child p.children)
+  then Hashtbl.replace pages parent.mld {p with children = child :: p.children}
+  else Format.eprintf "(skipping)\n%!"
 
-let universe_trio info =
-  subdir_mld_odoc universes_trio.dir info.universe
+let subdir_mld_odoc parent name =
+  let f = Fpath.v (Printf.sprintf "%s.mld" name) in
+  let basedir = match parent with
+    | None -> overall_basedir
+    | Some p -> p.dir
+  in
+  let mld = Fpath.(basedir // f) in
+  let child =
+    match Hashtbl.find_opt pages mld with
+    | Some p -> p
+    | None ->
+      let p = 
+        { mldname = name;
+          dir = Fpath.(basedir // v name);
+          mld;
+          odoc = Fpath.(basedir // v (Printf.sprintf "page-%s.odoc" name));
+          children = [];
+          parent = (match parent with Some pparent -> Some pparent.mld | None -> None);
+          title = "title" }
+      in
+      Hashtbl.replace pages mld p;
+      p
+  in
+  match parent with
+  | None -> child
+  | Some pparent -> set_child pparent (Mld child.mld); child
 
 
-let package_trio info =
+let universes_page () = subdir_mld_odoc None "universes"
+let packages_page () = subdir_mld_odoc None "packages"
+
+let universe_page info =
+  subdir_mld_odoc (Some (universes_page ())) info.universe
+
+
+let package_page info =
   let blessed = is_blessed info in
   if blessed
-  then subdir_mld_odoc packages_trio.dir info.package.name
-  else subdir_mld_odoc (universe_trio info).dir info.package.name
+  then subdir_mld_odoc (Some (packages_page ())) info.package.name
+  else subdir_mld_odoc (Some (universe_page info)) info.package.name
 
-let version_trio info =
+let version_page info =
   let v_str = Astring.String.cuts ~sep:"." info.package.version in
   let v_str = String.concat "_" v_str in
-  subdir_mld_odoc (package_trio info).dir v_str
+  subdir_mld_odoc (Some (package_page info)) v_str
 
 let odoc_file_of_info info =
-  Fpath.((version_trio info).dir // set_ext "odoc" info.fname)
+  Fpath.((version_page info).dir // set_ext "odoc" info.fname)
 
 module StringSet = Set.Make(String)
 
 
 let parent_mld_fragment all_infos =
-  let blessed_odoc = subdir_mld_odoc (Fpath.(v "odocs")) "packages" in
-  let universes = ref { trio = universes_trio; title="Universes"; children = []; parent=None} in
-  let _blessed = ref { trio = blessed_odoc; title="Packages"; children = []; parent=None} in
-  let h = Hashtbl.create 100 in
-  let update trio child parent title =
-    match Hashtbl.find_opt h trio.mld with
-    | None -> Hashtbl.replace h trio.mld { trio = trio; children = [child]; title; parent}
-    | Some mld ->
-      if List.mem child mld.children
-      then ()
-      else Hashtbl.replace h trio.mld { mld with children = child :: mld.children }
-  in
   List.iter (fun info ->
-    let _b = is_blessed info in
-    let u = universe_trio info in
-    let p = package_trio info in
-    let v = version_trio info in
-    update v (CU info) (Some p.odoc) (Format.sprintf "%s version %s" info.package.name info.package.version);
-    update p (Mld v) (Some u.odoc) (Format.sprintf "Universe %s package %s" info.universe info.package.name);
-    update u (Mld p) (Some universes_trio.odoc) (Format.sprintf "Universe %s" info.universe);
-    if not (List.mem (Mld u) !universes.children) then universes := { !universes with children = Mld u :: !universes.children}
-    ) all_infos;
-  let parent_file = Hashtbl.to_seq h in
+    let parent = version_page info in
+    set_child parent (CU info)
+  ) all_infos;
+  let parent_file = Hashtbl.to_seq pages in
   let odocl_file trio =
     let file = Fpath.set_ext "odocl" trio.odoc in
     let segs = Fpath.segs file in
@@ -149,26 +158,28 @@ let parent_mld_fragment all_infos =
     String.concat "/" segs'
   in
   let child_format mld fmt = function
-  | CU info -> Format.fprintf fmt "echo \"{!child:%s}\" >> %a" info.name Fpath.pp mld.trio.mld
-  | Mld trio -> Format.fprintf fmt "echo \"{!child:%s}\" >> %a" trio.mldname Fpath.pp mld.trio.mld
+  | CU info -> Format.fprintf fmt "echo \"{!child:%s}\" >> %a" info.name Fpath.pp mld.mld
+  | Mld m ->
+    let page = Hashtbl.find pages m in
+    Format.fprintf fmt "echo \"{!child:%s}\" >> %a" page.mldname Fpath.pp mld.mld
   in
   let map_fn cur (_, mld) =
-  let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
-  [ Format.asprintf "%a : %a %a" Fpath.pp mld.trio.odoc Fpath.pp mld.trio.mld (Format.pp_print_option Fpath.pp) mld.parent;
-    Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.trio.mld (fun fmt -> function | None -> () | Some p -> Format.fprintf fmt "--parent %a" Fpath.pp p) mld.parent
-      (String.concat " " (List.map (function | Mld p -> Format.asprintf "--child %s" p.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase_ascii p.name)) children));
-    Format.asprintf "%a :" Fpath.pp mld.trio.mld;
-    Format.asprintf "\tmkdir -p %a" Fpath.pp (fst (Fpath.split_base mld.trio.mld));
-    Format.asprintf "\techo \"{0 %s }\" > %a" mld.title Fpath.pp mld.trio.mld;
-    Format.asprintf "\t%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") (child_format mld)) children;
-    Format.asprintf "%s : %a %a" (odocl_file mld.trio) Fpath.pp mld.trio.mld
-      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp) (List.map (function | Mld p -> p.odoc | CU p -> odoc_file_of_info p) children);
-    Format.asprintf "\todoc link %a -o %s %a" Fpath.pp mld.trio.odoc (odocl_file mld.trio)
-      (Format.pp_print_list (fun fmt p -> Format.fprintf fmt "-I %a" Fpath.pp p)) (List.sort_uniq compare (List.map (fun p -> let p' = match p with  Mld p -> p.odoc | CU p -> odoc_file_of_info p in fst (Fpath.split_base p')) children));
-    Format.asprintf "link: %s" (odocl_file mld.trio)
-      ] :: cur
-  in
-  Seq.fold_left map_fn (map_fn [] (!universes.trio.mld, !universes)) parent_file |> List.concat
+    let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
+    [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
+      Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "--parent %a" Fpath.pp page.odoc) mld.parent
+        (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase_ascii p.name)) children));
+      Format.asprintf "%a :" Fpath.pp mld.mld;
+      Format.asprintf "\tmkdir -p %a" Fpath.pp (fst (Fpath.split_base mld.mld));
+      Format.asprintf "\techo \"{0 %s }\" > %a" mld.title Fpath.pp mld.mld;
+      Format.asprintf "\t%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") (child_format mld)) children;
+      Format.asprintf "%s : %a %a" (odocl_file mld) Fpath.pp mld.odoc
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp) (List.map (function | Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p) children);
+      Format.asprintf "\todoc link %a -o %s %a" Fpath.pp mld.odoc (odocl_file mld)
+        (Format.pp_print_list (fun fmt p -> Format.fprintf fmt "-I %a" Fpath.pp p)) (List.sort_uniq compare (List.map (fun p -> let p' = match p with Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p in fst (Fpath.split_base p')) children));
+      Format.asprintf "link: %s" (odocl_file mld)
+        ] :: cur
+    in
+  Seq.fold_left map_fn [] parent_file |> List.concat
 
 
 
@@ -192,11 +203,11 @@ let compile_fragment all_infos info =
     Fpath.to_string odoc_file) deps
   in
 
-  let parent_trio = version_trio info in
+  let parent_trio = version_page info in
   let dep_odocs = Fpath.to_string parent_trio.odoc :: dep_odocs in
 
   (* Odoc requires the directories in which to find the odoc files of the dependencies *)
-  let dep_dirs = Fpath.Set.of_list @@ List.map (fun i -> (version_trio i).dir) deps in
+  let dep_dirs = Fpath.Set.of_list @@ List.map (fun i -> (version_page i).dir) deps in
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);

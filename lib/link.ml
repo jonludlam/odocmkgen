@@ -16,7 +16,8 @@ let is_hidden x =
 let filter_by_package all_files package =
   List.filter (fun file ->
     match Fpath.(segs (normalize file)) with
-    | "odocs" :: _universes :: _universe :: pkg :: _version :: _ :: _ when pkg = package -> true
+    | "odocs" :: "universes" :: _universe :: pkg :: _version :: _ :: _ when pkg = package -> true
+    | "odocs" :: "packages" :: pkg :: _version :: _ :: _ when pkg = package -> true
     | _ -> false) all_files
 
 let get_dir f = fst (Fpath.split_base f)
