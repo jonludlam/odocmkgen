@@ -111,6 +111,28 @@ module Compile = struct
   let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
 end
 
+module Prep = struct
+
+  let prep whitelist lib_dir switch =
+    Opam.switch := switch;
+    Prep.run whitelist lib_dir
+
+  let whitelist =
+    Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
+
+    let lib_dir =
+      let doc =
+        "Path to libraries. If not set, defaults to the global environment by \
+         querying $(b,ocamlfind)."
+      in
+      let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
+      (* [some string] and not [some dir] because we don't need it to exist yet. *)
+      Arg.(value & opt_all (fpath_dir) [] & info ["L"] ~doc ~docv:"LIB_DIR")
+
+  let cmd = Term.(const prep $ whitelist $ lib_dir $ Default.switch)
+
+  let info = Term.info "prep" ~doc:"Prep a directory tree for compiling"
+end
 module Link = struct
   let link package =
     Link.run (Fpath.v "odocs") package
@@ -128,7 +150,7 @@ end
 
 module Generate = struct
   let generate package =
-    Generate.run (Fpath.v "odocls") package
+    Generate.run (Fpath.v ".") package
 
   let package =
     let doc = "Select the package to examine" in
@@ -141,8 +163,10 @@ module Generate = struct
   
 end
 
+
+
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info) ] with
+  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info); Prep.(cmd, info) ] with
   | `Error _ ->
     Format.pp_print_flush Format.err_formatter ();
     exit 2

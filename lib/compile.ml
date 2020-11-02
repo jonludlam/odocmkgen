@@ -10,12 +10,25 @@ type source_info = {
   package : Opam.package; (* Package in which this file lives ("astring") *)
   deps : Odoc.compile_dep list; (** dependencies of this file *)
   blessed : bool;
-  universe : Digest.t
+  universe : Universe.t
 }
 
-type mldchild =
+let pp fmt s =
+  Format.fprintf fmt "@[<v 2>{@,root: %a@,name: %s@,dir: %a@,fname: %a@,digest: %s@,package: %a@,deps: [%s]@,blessed: %b@,universe: %s@,}@]"
+    Fpath.pp s.root s.name Fpath.pp s.dir Fpath.pp s.fname s.digest Opam.pp_package s.package (String.concat "," (List.map (fun o -> o.Odoc.c_unit_name) s.deps))
+    s.blessed s.universe.id
+
+
+  type mldchild =
   | Mld of Fpath.t
   | CU of source_info
+
+type mldtype =
+  | Packages
+  | Universes
+  | Universe of string
+  | Package of string
+  | Version
 
 and mld = {
   mldname : string;
@@ -24,7 +37,7 @@ and mld = {
   odoc: Fpath.t;
   children : mldchild list;
   parent : Fpath.t option;
-  title : string;
+  ty : mldtype;
 }
 
 let is_hidden x =
@@ -38,9 +51,9 @@ let is_hidden x =
   in
   is_hidden (Fpath.basename x)
 
-let package_of_relpath relpath =
+let universe_and_package_of_relpath relpath =
   match Fpath.segs relpath with
-  | pkg :: _ -> pkg
+  | "universes" :: universe :: pkg :: _version :: _rest -> (universe, pkg)
   | _ ->
     Format.eprintf "Invalid path, unable to determine package: %a\n%!" Fpath.pp relpath;
     failwith "Invalid path"
@@ -53,23 +66,20 @@ let best_source_file base_path =
   List.find exists file_preference
 
 (* Get info given a base file (cmt, cmti or cmi) *)
-let get_info root mod_file =
-  let best_file = best_source_file mod_file in
-  let deps = Odoc.compile_deps best_file in
+let get_info universe package root mod_file =
+  let fname = best_source_file mod_file in
+  let deps = Odoc.compile_deps fname in
   let (_, lname) = Fpath.split_base mod_file in
   let name = String.capitalize_ascii (Fpath.to_string lname) in
-  let relpath = match Fpath.relativize ~root best_file with Some p -> p | None -> failwith "odd" in
-  let (dir, fname) = Fpath.split_base relpath in
-  let package_name = package_of_relpath relpath in
+  let dir = match Fpath.relativize ~root fname with Some p -> p | None -> failwith "odd" in
   try
-    let dep_universe = Universe.Current.dep_universe package_name in
-    let (package, universe) = dep_universe in
-    let universe = universe.Universe.id in
     match List.partition (fun d -> d.Odoc.c_unit_name = name) deps with
-    | [self], deps ->
+    | self::_, deps ->
       let digest = self.c_digest in
+      let (dir, fname) = Fpath.split_base dir in
       [{root; name; dir; digest; deps; package; fname; universe; blessed=false}]
     | _ ->
+
       Format.eprintf "Failed to find digest for self (%s)\n%!" name;
       []
   with _ ->
@@ -81,11 +91,11 @@ let get_info root mod_file =
 let pages = Hashtbl.create 100
 
 let is_blessed info =
-  info.universe = "d41d8cd98f00b204e9800998ecf8427e" && info.package.name = "ocaml" && info.package.version = "4.11.1"
+  info.universe.id = "d41d8cd98f00b204e9800998ecf8427e" && info.package.name = "ocaml" && info.package.version = "4.11.1"
 
 let pp_mlchild fmt = function | CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
 
-let overall_basedir = Fpath.v "."
+let overall_basedir = Fpath.v "compile"
 
 let set_child parent child =
   let p = Hashtbl.find pages parent.mld in
@@ -94,7 +104,7 @@ let set_child parent child =
   then Hashtbl.replace pages parent.mld {p with children = child :: p.children}
   else Format.eprintf "(skipping)\n%!"
 
-let subdir_mld_odoc parent name =
+let subdir_mld_odoc parent name ty =
   let f = Fpath.v (Printf.sprintf "%s.mld" name) in
   let basedir = match parent with
     | None -> overall_basedir
@@ -112,7 +122,7 @@ let subdir_mld_odoc parent name =
           odoc = Fpath.(basedir // v (Printf.sprintf "page-%s.odoc" name));
           children = [];
           parent = (match parent with Some pparent -> Some pparent.mld | None -> None);
-          title = "title" }
+          ty }
       in
       Hashtbl.replace pages mld p;
       p
@@ -122,29 +132,99 @@ let subdir_mld_odoc parent name =
   | Some pparent -> set_child pparent (Mld child.mld); child
 
 
-let universes_page () = subdir_mld_odoc None "universes"
-let packages_page () = subdir_mld_odoc None "packages"
+let universes_page () = subdir_mld_odoc None "universes" Universes
+let packages_page () = subdir_mld_odoc None "packages" Packages
 
 let universe_page info =
-  subdir_mld_odoc (Some (universes_page ())) info.universe
+  subdir_mld_odoc (Some (universes_page ())) info.universe.id (Universe info.universe.id)
 
 
 let package_page info =
-  let blessed = is_blessed info in
+  let name =
+    let n_str = Astring.String.cuts ~sep:"-" info.package.name in
+    String.concat "_" n_str
+  in
+
+  let blessed = Universe.All.is_blessed info.package info.universe.id in
   if blessed
-  then subdir_mld_odoc (Some (packages_page ())) info.package.name
-  else subdir_mld_odoc (Some (universe_page info)) info.package.name
+  then subdir_mld_odoc (Some (packages_page ())) name (Package info.package.name)
+  else subdir_mld_odoc (Some (universe_page info)) name (Package info.package.name)
 
 let version_page info =
   let v_str = Astring.String.cuts ~sep:"." info.package.version in
   let v_str = String.concat "_" v_str in
-  subdir_mld_odoc (Some (package_page info)) v_str
+  subdir_mld_odoc (Some (package_page info)) v_str Version
 
 let odoc_file_of_info info =
   Fpath.((version_page info).dir // set_ext "odoc" info.fname)
 
 module StringSet = Set.Make(String)
 
+
+let mld_contents mld =
+  let child_format fmt = function
+  | CU info -> Format.fprintf fmt "{!child:%s}\n" info.name
+  | Mld m ->
+    let page = Hashtbl.find pages m in
+    Format.fprintf fmt "{!child:%s}\n" page.mldname
+  in
+  let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
+  match mld.ty with
+  | Universes ->
+    [ "{0 Universes}";
+      "These universes are for those packages that are compiled against an alternative set of dependencies than those in the 'packages' hierarchy.";
+      "" ] @
+      List.map (fun child -> Format.asprintf "%a" child_format child) children
+  | Universe id ->
+    let universe = Universe.All.find_universe id in
+    let packs = Universe.S.to_seq universe.Universe.packages in
+    let lines = Seq.fold_left (fun lines package ->
+      (Format.asprintf "%a" Opam.pp_package package)::lines) [] packs in
+    [ Printf.sprintf "{0 Universe %s}" id;
+      "{1 Contents}";
+      "The following packages form this dependency universe:" ]
+      @ lines @ [
+      "{1 Packages}";
+      "This dependency universe has been used to compile the following packages:"
+      ] @ List.map (fun child -> Format.asprintf "%a" child_format child) children
+  | Packages ->
+    let name = function
+      | CU info -> info.name
+      | Mld m ->
+        let page = Hashtbl.find pages m in
+        page.mldname
+    in
+    let interpose_alphabet packages =
+      let alpha_heading name =
+        Printf.sprintf "{2 %c}" (Char.uppercase_ascii name.[0])
+      in
+      
+      let rec inner ps =
+        match ps with
+        | a :: b :: rest ->
+          let na = name a in
+          let nb = name b in
+          if na.[0] <> nb.[0]
+          then Format.asprintf "%a" child_format a :: (alpha_heading nb) :: inner (b :: rest)
+          else Format.asprintf "%a" child_format a :: (inner (b :: rest))
+        | [a] ->
+          [Format.asprintf "%a" child_format a]
+        | [] ->
+          []
+      in
+      let first = List.hd packages in
+      (alpha_heading (name first)) :: inner packages
+    in
+    
+    [ "{0 Packages}" ] @ interpose_alphabet (List.sort (fun c1 c2 -> String.compare (name c1) (name c2)) children)
+  | Package p -> [
+    Printf.sprintf "{0 Package '%s'}" p;
+    "{1 Versions}"
+  ] @ List.map (fun child -> Format.asprintf "%a" child_format child) children
+  | Version -> [
+    "{0 Modules}"
+  ] @ List.map (fun child -> Format.asprintf "%a" child_format child) children
+    
 
 let parent_mld_fragment all_infos =
   List.iter (fun info ->
@@ -153,31 +233,28 @@ let parent_mld_fragment all_infos =
   ) all_infos;
   let parent_file = Hashtbl.to_seq pages in
   let odocl_file trio =
-    let file = Fpath.set_ext "odocl" trio.odoc in
-    let segs = Fpath.segs file in
-    let segs' = "odocls" :: List.tl segs in
-    String.concat "/" segs'
-  in
-  let child_format mld fmt = function
-  | CU info -> Format.fprintf fmt "echo \"{!child:%s}\" >> %a" info.name Fpath.pp mld.mld
-  | Mld m ->
-    let page = Hashtbl.find pages m in
-    Format.fprintf fmt "echo \"{!child:%s}\" >> %a" page.mldname Fpath.pp mld.mld
+    Fpath.set_ext "odocl" trio.odoc
   in
   let map_fn cur (_, mld) =
     let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
+    let (path,_) = Fpath.split_base mld.mld in
+    Util.mkdir_p path;
+    let oc = open_out (Fpath.to_string mld.mld) in
+    let fmt = Format.formatter_of_out_channel oc in
+    Format.fprintf fmt "%s\n%!" (String.concat "\n" (mld_contents mld));
+    close_out oc;
+
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
       Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "--parent %a" Fpath.pp page.odoc) mld.parent
         (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase_ascii p.name)) children));
-      Format.asprintf "%a :" Fpath.pp mld.mld;
-      Format.asprintf "\tmkdir -p %a" Fpath.pp (fst (Fpath.split_base mld.mld));
-      Format.asprintf "\techo \"{0 %s }\" > %a" mld.title Fpath.pp mld.mld;
-      Format.asprintf "\t%a" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") (child_format mld)) children;
-      Format.asprintf "%s : %a %a" (odocl_file mld) Fpath.pp mld.odoc
-        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp) (List.map (function | Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p) children);
-      Format.asprintf "\todoc link %a -o %s %a" Fpath.pp mld.odoc (odocl_file mld)
+      Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
+        (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
+        (List.map (function
+          | Mld p -> let page = Hashtbl.find pages p in page.odoc
+          | CU p -> odoc_file_of_info p) children);
+      Format.asprintf "\todoc link %a -o %a %a" Fpath.pp mld.odoc Fpath.pp (odocl_file mld)
         (Format.pp_print_list (fun fmt p -> Format.fprintf fmt "-I %a" Fpath.pp p)) (List.sort_uniq compare (List.map (fun p -> let p' = match p with Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p in fst (Fpath.split_base p')) children));
-      Format.asprintf "link: %s" (odocl_file mld)
+      Format.asprintf "link: %a" Fpath.pp (odocl_file mld)
         ] :: cur
     in
   Seq.fold_left map_fn [] parent_file |> List.concat
@@ -192,7 +269,7 @@ let compile_fragment all_infos info =
   (* Find by digest the [source_info] for each dependency in our source_info record *)
   let deps =
     info.deps >>= fun dep ->
-    try [ List.find (fun x -> x.digest = dep.Odoc.c_digest) all_infos ]
+    try [ List.find (fun x -> x.digest = dep.Odoc.c_digest && Universe.S.subset x.universe.packages info.universe.packages) all_infos ]
     with Not_found ->
       Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname));
       []
@@ -212,7 +289,7 @@ let compile_fragment all_infos info =
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
-    Format.asprintf "\t@odoc compile --parent %a $< %s -o %a" Fpath.pp parent_trio.odoc include_str Fpath.pp odoc_path;
+    Format.asprintf "\todoc compile --parent %a $< %s -o %a" Fpath.pp parent_trio.odoc include_str Fpath.pp odoc_path;
     Format.asprintf "compile : %a" Fpath.pp odoc_path;
     Format.asprintf "Makefile.link : %a" Fpath.pp odoc_path ]
 
@@ -226,22 +303,34 @@ let link_fragment all_infos =
       let odocs = String.concat " " (List.map (fun info -> odoc_file_of_info info |> Fpath.to_string) infos) in
       [ Format.asprintf "-include Makefile.%s.link" package.Opam.name;
         Format.asprintf "Makefile.%s.link: %s" package.name odocs;
-        Format.asprintf "\t@odocmkgen link --package %s" package.name ]        
+        Format.asprintf "\todocmkgen link --package %s" package.name ]        
     ) packages
 
-let run whitelist roots =
-  let infos =
-    roots >>= fun root ->
-    Inputs.find_files ["cmi";"cmt";"cmti"] root
-    >>= get_info root
-  in
-  let infos =
-    if List.length whitelist > 0
-    then List.filter (fun info -> List.mem info.package.name whitelist) infos
-    else infos
-  in
-  let infos =
-    List.filter (fun info -> try ignore (Universe.Current.dep_universe info.package.name); true with _ -> false) infos
+let universe_path id =
+  Fpath.(v "prep" / "universes" / id)
+
+let packages_path id =
+  Fpath.(universe_path id // v "packages.usexp")
+  
+let read_universe id =
+  let universe = Universe.load (packages_path id) in
+  Inputs.(contents (universe_path id) >>= filter is_dir) >>= fun package_path ->
+  Inputs.(contents package_path >>= filter is_dir) >>= fun version_path ->
+  let package = Opam.load (Fpath.(version_path / "package.psexp")) in
+  Inputs.find_files ["cmi";"cmt";"cmti"] version_path
+  >>= get_info universe package version_path
+
+
+
+
+
+let run _whitelist _roots =
+  Universe.All.init ();
+  let infos = Inputs.contents Fpath.(v "prep" / "universes") >>= fun universe_fpath ->
+    match Fpath.segs universe_fpath with
+    | ["prep"; "universes"; id] ->
+      read_universe id
+    | _ -> []
   in
   let lines = List.concat (List.map (compile_fragment infos) infos) in
   let oc = open_out "Makefile.gen" in

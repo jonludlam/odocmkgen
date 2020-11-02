@@ -12,11 +12,14 @@ type link_dep = {
   l_package : string;
   l_name : string;
   l_digest : Digest.t;
+  l_version : string;
+  l_universe : string option
 }
 
 let pp_link_dep fmt l =
-  Format.fprintf fmt "{ %s %s }" l.l_package l.l_name
+  Format.fprintf fmt "{ %s %s %s %s}" l.l_package l.l_name l.l_version (match l.l_universe with Some u -> Printf.sprintf "(%s)" u | None -> "")
 
+  
 let lines_of_process p =
   let ic = Unix.open_process_in p in
   let lines = Fun.protect
@@ -47,10 +50,10 @@ let link_deps dir =
     match Astring.String.cuts ~sep:" " line with
     | [parent_path; l_name; l_digest] -> begin
       match Astring.String.cuts ~sep:"/" parent_path with
-      | "universes" :: _universe :: l_package :: _version :: _ ->
-      [{l_package; l_name; l_digest}]
-      | "packages" :: l_package :: _version :: _ ->
-      [{l_package; l_name; l_digest}]
+      | "universes" :: universe :: l_package :: l_version :: _ ->
+      [{l_package; l_name; l_digest; l_version; l_universe = Some universe}]
+      | "packages" :: l_package :: l_version :: _ ->
+      [{l_package; l_name; l_digest; l_version; l_universe = None}]
       | _ -> []
       end
     | _ -> []
