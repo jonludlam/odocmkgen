@@ -76,7 +76,7 @@ let run whitelist roots =
     else infos
   in
   let infos =
-    List.filter (fun info -> try ignore (Universe.Current.dep_universe info.package.name); true with _ -> false) infos
+    List.filter (fun info -> try ignore (Universe.Current.dep_universe info.package.name); true with _ -> Format.eprintf "pruning %a\n%!" Fpath.pp info.file; false) infos
   in
   let copy info =
     let v_str = Astring.String.cuts ~sep:"." info.package.version in
