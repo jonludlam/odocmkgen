@@ -22,14 +22,21 @@ let read_lib_dir () =
   | Unix.WEXITED 0 -> base_dir
   | _ -> Format.eprintf "Failed to find ocaml lib path"; exit 1
 
-
+let read_doc_dir () =
+  let dir = read_lib_dir () in
+  Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
 
 module Default = struct
-    let default whitelist lib_dir =
+    let default whitelist lib_dir doc_dir =
       let lib_dir =
         match lib_dir with
         | [] -> [read_lib_dir ()]
         | _ -> lib_dir
+      in
+      let doc_dir =
+        match doc_dir with
+        | [] -> [read_doc_dir ()]
+        | _ -> doc_dir
       in
       let pp_whitelist fmt = function
         | [] -> ()
@@ -38,13 +45,16 @@ module Default = struct
       let pp_libdir fmt l =
         List.iter (fun lib -> Format.fprintf fmt " -L %s" lib) l
       in
+      let pp_docdir fmt l =
+        List.iter (fun lib -> Format.fprintf fmt " -D %s" lib) l
+      in
       Format.printf {|
 default: generate
 .PHONY: compile link generate clean html latex man
 compile: odocs
 link: compile odocls
 Makefile.gen : Makefile
-	odocmkgen compile%a%a
+	odocmkgen compile%a%a%a
 generate: link
 odocs:
 	mkdir odocs
@@ -58,7 +68,7 @@ html/odoc.css:
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
-|} pp_whitelist whitelist pp_libdir lib_dir
+|} pp_whitelist whitelist pp_libdir lib_dir pp_docdir doc_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
@@ -71,8 +81,15 @@ endif
     (* [some string] and not [some dir] because we don't need it to exist yet. *)
     Arg.(value & opt_all (string) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
+  let doc_dir =
+    let doc =
+      "Path to docs"
+    in
+    (* [some string] and not [some dir] because we don't need it to exist yet. *)
+    Arg.(value & opt_all (string) [] & info ["D"] ~doc ~docv:"DOC_DIR")
+  
   let cmd =
-    Term.(const default $ whitelist $ lib_dir)
+    Term.(const default $ whitelist $ lib_dir $ doc_dir)
 
   let info =
     Term.info ~version:"%%VERSION%%" "odocmkgen"
@@ -80,8 +97,8 @@ end
 
 module Compile = struct
 
-  let compile whitelist lib_dir =
-    Compile.run whitelist lib_dir
+  let compile whitelist lib_dir doc_dir =
+    Compile.run whitelist lib_dir doc_dir
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
@@ -95,7 +112,15 @@ module Compile = struct
       (* [some string] and not [some dir] because we don't need it to exist yet. *)
       Arg.(value & opt_all (fpath_dir) [] & info ["L"] ~doc ~docv:"LIB_DIR")
 
-  let cmd = Term.(const compile $ whitelist $ lib_dir)
+  let doc_dir =
+    let doc =
+      "Path to docs"
+    in
+    let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
+    (* [some string] and not [some dir] because we don't need it to exist yet. *)
+    Arg.(value & opt_all (fpath_dir) [] & info ["D"] ~doc ~docv:"DOC_DIR")
+
+  let cmd = Term.(const compile $ whitelist $ lib_dir $ doc_dir)
 
   let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
 end
@@ -153,20 +178,5 @@ let _ =
     Format.pp_print_flush Format.err_formatter ();
     exit 2
   | _ -> ()
-
-
-  (* let packages = Findlib.read_all () in *)
-  (* let extra_threads =
-    let ocaml_package = List.find (fun p -> p.Findlib.package = "threads") packages in
-    let threads_dir = Fpath.(ocaml_package.Findlib.dir / "threads") in
-    threads_dir
-  in *)
-  (* let resolved_infos = resolve_deps extra_threads packages infos in
-  let deptree = List.map (fun info -> info.digest, info.deps >>= fun d -> match d.dep_digest with | Some x -> [x] | None -> []) in *)
-  (* let hashes = List.map (get_hash deptree) (List.map fst deptree) in
-  List.iter2 (fun info hash -> Format.printf "%s %s\n" (Digest.to_hex info.digest) (Digest.to_hex hash)) resolved_infos hashes; *)
-
-
-
 
 

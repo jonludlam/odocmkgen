@@ -26,6 +26,20 @@ let paths_of_package all_files package =
   let dirs = List.map get_dir package_files in
   setify dirs
 
+
+(* Ideally we would have a list of packages on which the specified package depends.
+   Given that, it's a simple case of calling `odoc link` on each non-hidden odoc file
+   with the include paths set to point to the directories containing the odoc files
+   of the dependencies.
+   
+   Here we're making an assumption - that the references in the doc comments will
+   only be referring to packages that are required to compile the modules. Other
+   drivers may be able to supply additional packages in which to find referenced
+   elements.
+   
+   We're actually finding out what packages are required by calling `odoc link-deps`,
+   which will give us enough packages to resolve all of the paths. This complicates
+   the following function somewhat. *)
 let run toppath package =
     (* Find all odoc files, result is list of Fpath.t with no extension *)
     let all_files = Inputs.find_files ["odoc"] toppath in
@@ -44,6 +58,7 @@ let run toppath package =
     let package_makefile = Printf.sprintf "Makefile.%s.link" package in
 
     let oc = open_out package_makefile in
+    let fmt = Format.formatter_of_out_channel oc in
 
     let output_files = List.map (fun file ->
       (* The directory containing the odoc file *)
@@ -66,15 +81,14 @@ let run toppath package =
         | _ -> Format.eprintf "Something odd happening with the odoc paths\n%!";
           exit 1
       in
-      let str =
-        Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
-          Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
-          (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
-          Fpath.pp output_file
-      in
 
-      Printf.fprintf oc "%s" str;
-      output_file
+      List.iter (fun package ->
+        Format.fprintf fmt "%a.odocl : Makefile.%s.link\n%!" Fpath.pp output_file package) dep_packages;
+      Format.fprintf fmt "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
+        Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
+        (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
+        Fpath.pp output_file;
+        output_file
       ) files in
     Printf.fprintf oc "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n" package (String.concat " " (List.map (fun f -> Fpath.(to_string (add_ext "odocl" f))) output_files)) package;
     Printf.fprintf oc "-include Makefile.%s.generate\n" package;

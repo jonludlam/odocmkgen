@@ -13,4 +13,3 @@ let lines_of_process p =
         in inner [])
     in
     lines
-
