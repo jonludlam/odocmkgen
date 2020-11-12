@@ -42,7 +42,10 @@ let paths_of_package all_files package =
    the following function somewhat. *)
 let run toppath package =
     (* Find all odoc files, result is list of Fpath.t with no extension *)
-    let all_files = Inputs.find_files ["odoc"] toppath in
+    let all_files = Inputs.find_files toppath >>= fun p ->
+      let base, ext = Fpath.split_ext p in
+      if ext = ".odoc" then [ base ] else []
+    in
 
     let pkg_files = filter_by_package all_files package in 
 

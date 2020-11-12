@@ -12,7 +12,10 @@ let paths_of_package all_files package =
 let run path package =
   let package_makefile = Printf.sprintf "Makefile.%s.generate" package in
 
-  let all_files = Inputs.find_files ["odocl"] path in
+  let all_files = Inputs.find_files path >>= fun p ->
+    let base, ext = Fpath.split_ext p in
+    if ext = ".odocl" then [ base ] else []
+  in
 
   let pkg_files = paths_of_package all_files package in
 
