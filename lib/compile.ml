@@ -36,7 +36,7 @@ let get_info root mod_file =
      preference *)
   let best_source_file base_path =
     let file_preference = List.map (fun ext -> Fpath.add_ext ext base_path) ["cmti"; "cmt"; "cmi"] in
-    let exists s = try let (_ : Unix.stats) = Unix.stat (Fpath.to_string s) in true with _ -> false in
+    let exists p = Sys.file_exists (Fpath.to_string p) in
     List.find exists file_preference
   in
 

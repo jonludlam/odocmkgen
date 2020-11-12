@@ -1,27 +1,13 @@
 open Listm
 
-let with_open_dir d f =
-  let dh = Unix.opendir (Fpath.to_string d) in
-  Fun.protect
-    ~finally:(fun () -> Unix.closedir dh)
-    (fun () ->
-      f dh)
-
-let filter_dots = function
-| "." -> []
-| ".." -> []
-| e -> [e]
-  
 let contents dir =
-  with_open_dir dir (fun dh ->
-    let rec loop acc =
-      try loop (Unix.readdir dh :: acc) with _ -> acc
-    in loop []) >>= filter_dots >>= fun x -> [Fpath.(dir / x)]
+  Sys.readdir (Fpath.to_string dir)
+  |> Array.map (Fpath.( / ) dir)
+  |> Array.to_list
 
 let filter pred item = if pred item then [item] else []
 
-let is_dir x =
-  try Unix.((stat (Fpath.to_string x)).st_kind = S_DIR) with _ -> false
+let is_dir x = Sys.is_directory (Fpath.to_string x)
 
 let has_ext exts f =
   List.exists (fun suffix -> Fpath.has_ext suffix f) exts
