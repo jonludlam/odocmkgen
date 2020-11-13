@@ -63,10 +63,7 @@ type t = {
   name : string; (** 'Astring' *)
 
   root : Fpath.t;   (** Root path in which this was found, e.g. /home/opam/.opam/4.10.0/lib *)
-  dir : Fpath.t;    (** Containing dir path relative to root 'astring/' *)
-  fname : Fpath.t;  (** Filename with extension. The full path is [root]/[dir]/[fname] *)
-  outname : Fpath.t; (** Output filename *)
-  outnamel : Fpath.t; (** Link output filename *)
+  relpath : Fpath.t; (** Relative path to the input file within [root]. *)
 
   digest : Digest.t; (** Digest of the compilation unit itself *)
   package : string;  (** Package in which this file lives ("astring") *)
@@ -74,16 +71,18 @@ type t = {
 }
 
 let pp fmt x =
-  Format.fprintf fmt "@[<v 2>{ name: %s@,root: %a@,dir: %a@,fname: %a@,digest: %s@,package:%s }@]"
-    x.name Fpath.pp x.root Fpath.pp x.dir Fpath.pp x.fname x.digest x.package
+  Format.fprintf fmt "@[<v 2>{ name: %s@,root: %a@,path: %a@,digest: %s@,package:%s }@]"
+    x.name Fpath.pp x.root Fpath.pp x.relpath x.digest x.package
+
+let input_file t = Fpath.(t.root // t.relpath)
 
 (** Returns the relative path to an odoc file based on an input file. For example, given
    `/home/opam/.opam/4.10.0/lib/ocaml/compiler-libs/lambda.cmi` it will return
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
-let compile_target t = Fpath.(v "odocs" // t.dir // set_ext "odoc" t.outname)
+let compile_target t = Fpath.(v "odocs" // set_ext "odoc" t.relpath)
 
 (** Like [compile_target] but goes into the "odocls" directory. *)
-let link_target t = Fpath.(v "odocls" // t.dir // set_ext "odocl" t.outname)
+let link_target t = Fpath.(v "odocls" // set_ext "odocl" t.relpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_cm_info root file =
@@ -93,15 +92,13 @@ let get_cm_info root file =
     | Some p -> p
     | None -> failwith "odd"
   in
-  let dir, fname = Fpath.split_base relpath in
+  let fname = Fpath.base relpath in
   let name = String.capitalize_ascii Fpath.(to_string (rem_ext fname)) in
-  let outname = Fpath.set_ext "odoc" fname in
-  let outnamel = Fpath.set_ext "odocl" fname in
   let package = package_of_relpath relpath in
   match List.partition (fun d -> d.Odoc.c_unit_name = name) deps with
   | [ self ], deps ->
       let digest = self.c_digest in
-      let result = { root; name; dir; digest; deps; package; fname; outname; outnamel } in
+      let result = { name; root; relpath; digest; package; deps; } in
       (* Format.eprintf "%a\n%!" pp result; *)
       [ result ]
   | _ ->
@@ -114,12 +111,10 @@ let get_mld_info root file =
     | Some p -> p
     | None -> failwith "odd"
   in
-  let dir, fname = Fpath.split_base relpath in
+  let fname = Fpath.base relpath in
   let name = Format.asprintf "page-%a" Fpath.pp (Fpath.rem_ext fname) in
   let package = package_of_relpath relpath in
-  let outname = Fpath.add_ext "odoc" (Fpath.v name) in
-  let outnamel = Fpath.add_ext "odocl" (Fpath.v name) in
-  [ { root; name; dir; digest = ""; deps = []; package; fname; outname; outnamel } ]
+  [ { name; root; relpath; digest = ""; deps = []; package; } ]
 
 let find_inputs ~whitelist roots =
   let roots = List.sort_uniq Fpath.compare roots in

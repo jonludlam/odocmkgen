@@ -13,7 +13,7 @@ let compile_fragment all_infos info =
     info.deps >>= fun dep ->
     try [ List.find (fun x -> x.Inputs.digest = dep.Odoc.c_digest) all_infos ]
     with Not_found ->
-      Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname));
+      Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp info.relpath;
       []
   in
 
@@ -27,7 +27,7 @@ let compile_fragment all_infos info =
     |> String.concat " "
   and deps_str = String.concat " " (List.map Fpath.to_string dep_odocs) in
 
-  [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) deps_str;
+  [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp (Inputs.input_file info) deps_str;
     Format.asprintf "\t@odoc compile --package %s $< %s -o %a" info.package include_str Fpath.pp odoc_path;
     Format.asprintf "compile : %a" Fpath.pp odoc_path;
     Format.asprintf "Makefile.%s.link : %a" info.package Fpath.pp odoc_path ]
