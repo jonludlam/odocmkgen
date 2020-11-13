@@ -54,7 +54,7 @@ default: generate
 compile: odocs
 link: compile odocls
 Makefile.gen : Makefile
-	odocmkgen compile%a%a%a
+	odocmkgen gen%a%a%a
 generate: link
 odocs:
 	mkdir odocs
@@ -95,10 +95,7 @@ endif
     Term.info ~version:"%%VERSION%%" "odocmkgen"
 end
 
-module Compile = struct
-
-  let compile whitelist lib_dir doc_dir =
-    Compile.run whitelist lib_dir doc_dir
+module Gen = struct
 
   let whitelist =
     Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
@@ -120,24 +117,10 @@ module Compile = struct
     (* [some string] and not [some dir] because we don't need it to exist yet. *)
     Arg.(value & opt_all (fpath_dir) [] & info ["D"] ~doc ~docv:"DOC_DIR")
 
-  let cmd = Term.(const compile $ whitelist $ lib_dir $ doc_dir)
+  let cmd = Term.(const Gen.run $ whitelist $ lib_dir $ doc_dir)
 
-  let info = Term.info "compile" ~doc:"Produce a makefile for compiling odoc files"
-end
+  let info = Term.info "gen" ~doc:"Produce a makefile for building the documentation."
 
-module Link = struct
-  let link package =
-    Link.run (Fpath.v "odocs") package
-
-  let package =
-    let doc = "Select the package to examine" in
-    Arg.(required & opt (some string) None & info ["p"; "package"]
-            ~docv:"PKG" ~doc)
-    
-  let cmd = Term.(const link $ package)
-
-  let info = Term.info "link" ~doc:"Produce a makefile for linking odoc files"
-  
 end
 
 module Generate = struct
@@ -173,10 +156,8 @@ module OpamDeps = struct
 end
 
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Compile.(cmd, info); Link.(cmd, info); Generate.(cmd, info); OpamDeps.(cmd, info)] with
+  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Gen.(cmd, info); Generate.(cmd, info); OpamDeps.(cmd, info)] with
   | `Error _ ->
     Format.pp_print_flush Format.err_formatter ();
     exit 2
   | _ -> ()
-
-

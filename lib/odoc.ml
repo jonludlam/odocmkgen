@@ -7,13 +7,6 @@ type compile_dep = {
   c_unit_name : string;
   c_digest : Digest.t;
 }
-    
-type link_dep = {
-  l_package : string;
-  l_name : string;
-  l_digest : Digest.t;
-}
-
 
 (* *)
 let compile_deps file =
@@ -24,16 +17,6 @@ let compile_deps file =
     | _ -> []
   in
   Util.lines_of_process (Format.asprintf "odoc compile-deps %a" Fpath.pp file)
-  >>= process_line
-
-let link_deps dir =
-  let process_line line =
-    match Astring.String.cuts ~sep:" " line with
-    | [l_package; l_name; l_digest] ->
-      [{l_package; l_name; l_digest}]
-    | _ -> []
-  in
-  Util.lines_of_process (Format.asprintf "odoc link-deps %a" Fpath.pp dir)
   >>= process_line
 
 let generate_targets odocl ty =
