@@ -36,3 +36,10 @@ A basic test for working with Dune's _build/install.
   odoc support-files --output-dir html
   odoc html-generate odocls/default/doc/test/odoc-pages/page-test.odocl --output-dir html
   odoc html-generate odocls/default/lib/test/test.odocl --output-dir html
+
+  $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
+
+Doesn't resolve but should:
+
+  $ odoc_print odocls/default/doc/test/odoc-pages/page-test.odocl | jq_scan_references
+  {"`Dot":[{"`Root":["Test","`TUnknown"]},"x"]}
