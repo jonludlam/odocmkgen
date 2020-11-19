@@ -1,8 +1,10 @@
 let run whitelist roots docroots =
   let inputs = Inputs.find_inputs ~whitelist (roots @ docroots) in
   let oc = open_out "Makefile.gen" in
+  let fmt = Format.formatter_of_out_channel oc in
   Fun.protect
-    ~finally:(fun () -> close_out oc)
+    ~finally:(fun () ->
+      Format.pp_print_flush fmt ();
+      close_out oc)
     (fun () ->
-      Compile.gen oc inputs;
-      Link.gen oc inputs)
+      Makefile.(pp fmt (concat [ Compile.gen inputs; Link.gen inputs ])))

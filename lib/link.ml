@@ -11,7 +11,7 @@ let is_hidden s =
       else aux (i + 1)
   in aux 0
 
-let gen_input oc ~packages ~package_deps inp =
+let gen_input ~packages ~package_deps inp =
   let deps_dirs =
     (* Parent directories of every inputs from every [package_deps]. *)
     let fold_inputs acc inp =
@@ -22,17 +22,18 @@ let gen_input oc ~packages ~package_deps inp =
     in
     List.fold_left fold_pkgs Fpath.Set.empty package_deps |> Fpath.Set.elements
   in
-  (* Include directories of every dependencies *)
-  let deps_inc = List.map (fun p -> "-I " ^ Fpath.to_string p) deps_dirs
   (* Phony targets of dependencies (see {!Compile}). *)
-  and compile_pkg_deps = List.map (( ^ ) "compile-") package_deps in
-  let input_file = Fpath.(to_string (Inputs.compile_target inp))
-  and output_file = Fpath.(to_string (Inputs.link_target inp)) in
-  Printf.fprintf oc "%s : %s | %s\n\t@odoc link $< -o $@ %s\nlink: %s\n"
-    output_file input_file
-    (String.concat " " compile_pkg_deps)
-    (String.concat " " deps_inc)
-    output_file
+  let compile_pkg_deps = List.map (( ^ ) "compile-") package_deps in
+  let input_file = Inputs.compile_target inp
+  and output_file = Inputs.link_target inp in
+  let open Makefile in
+  let pp_deps_inc fmt = List.iter (Format.fprintf fmt " -I %a" Fpath.pp) in
+  concat
+    [
+      rule output_file ~fdeps:[ input_file ] ~oo_deps:compile_pkg_deps
+        [ Format.asprintf "odoc link $< -o $@%a" pp_deps_inc deps_dirs ];
+      phony_rule "link" ~fdeps:[ output_file ] [];
+    ]
 
 (** Until we have a better way of resolving packages. Find package dependencies
     by following compile deps. Then transitive dependencies are flattened. *)
@@ -63,7 +64,7 @@ let package_deps ~inputs_map ~packages =
 
    We assume that link dependencies are the same as the corresponding compile
    dependencies. *)
-let gen oc (inputs : Inputs.t list) =
+let gen (inputs : Inputs.t list) =
   let inputs_map =
     StringMap.of_seq
       (Seq.map (fun inp -> (inp.Inputs.name, inp)) (List.to_seq inputs))
@@ -74,17 +75,20 @@ let gen oc (inputs : Inputs.t list) =
   in
   let packages = Inputs.split_packages link_inputs in
   let package_deps = package_deps ~inputs_map ~packages in
-  packages
-  |> StringMap.iter (fun package inputs ->
-         let package_deps = package :: StringMap.find package package_deps in
-         List.iter (gen_input oc ~packages ~package_deps) inputs;
-         let output_files =
-           List.map (fun inp -> Fpath.to_string (Inputs.link_target inp)) inputs
-         in
-         (* Call generate Makefiles *)
-         Printf.fprintf oc
-           "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n"
-           package
-           (String.concat " " output_files)
-           package;
-         Printf.fprintf oc "-include Makefile.%s.generate\n" package)
+  StringMap.fold
+    (fun package inputs acc ->
+      let package_deps = package :: StringMap.find package package_deps in
+      let output_files = List.map Inputs.link_target inputs in
+      let pkg_makefile =
+        Fpath.v (Format.asprintf "Makefile.%s.generate" package)
+      in
+      let open Makefile in
+      concat
+        [
+          acc;
+          concat (List.map (gen_input ~packages ~package_deps) inputs);
+          rule pkg_makefile ~fdeps:output_files
+            [ "odocmkgen generate --package " ^ package ];
+          include_ pkg_makefile;
+        ])
+    packages (Makefile.concat [])
