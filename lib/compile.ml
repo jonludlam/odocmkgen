@@ -23,20 +23,31 @@ let compile_fragment all_infos info =
     List.map Fpath.(fun p -> to_string (parent p)) dep_odocs
     |> List.sort_uniq String.compare
     |> String.concat " "
-  and deps_str = String.concat " " (List.map Fpath.to_string dep_odocs) in
+  in
 
-  [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp (Inputs.input_file info) deps_str;
-    Format.asprintf "\t@odoc compile --package %s $< %s -o %a" info.package include_str Fpath.pp odoc_path;
-    Format.asprintf "compile-%s : %a" info.package Fpath.pp odoc_path;
-    Format.asprintf "Makefile.%s.link : %a" info.package Fpath.pp odoc_path ]
+  let open Makefile in
+  concat
+    [
+      rule odoc_path
+        ~fdeps:(Inputs.input_file info :: dep_odocs)
+        [
+          Format.asprintf "odoc compile --package %s $< %s -o $@" info.package
+            include_str;
+        ];
+      phony_rule ("compile-" ^ info.package) ~fdeps:[ odoc_path ] [];
+      rule
+        (Fpath.v (Format.asprintf "Makefile.%s.link" info.package))
+        ~fdeps:[ odoc_path ] [];
+    ]
 
-let gen oc inputs =
-  let print_lines = List.iter (Printf.fprintf oc "%s\n") in
+let gen inputs =
   let packages = Inputs.split_packages inputs in
-  List.iter (fun inp -> print_lines (compile_fragment inputs inp)) inputs;
   let package_rules_s =
     List.map (fun (pkg, _) -> "compile-" ^ pkg) (StringMap.bindings packages)
-    |> String.concat " "
   in
-  Printf.fprintf oc "compile : %s\n" package_rules_s;
-  Printf.fprintf oc ".PHONY : %s\n" package_rules_s
+  let open Makefile in
+  concat
+    [
+      concat (List.map (compile_fragment inputs) inputs);
+      phony_rule "compile" ~deps:package_rules_s [];
+    ]

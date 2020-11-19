@@ -31,6 +31,10 @@ A basic test for working with Dune's _build/install.
   Warning, couldn't find dep Stdlib of file _build/install/default/lib/test/test.cmti
 
   $ make html
+  odoc compile --package default _build/install/default/doc/test/odoc-pages/test.mld  -o odocs/default/doc/test/odoc-pages/page-test.odoc
+  odoc compile --package default _build/install/default/lib/test/test.cmti  -o odocs/default/lib/test/test.odoc
+  odoc link odocs/default/doc/test/odoc-pages/page-test.odoc -o odocls/default/doc/test/odoc-pages/page-test.odocl -I odocs/default/doc/test/odoc-pages/ -I odocs/default/lib/test/
+  odoc link odocs/default/lib/test/test.odoc -o odocls/default/lib/test/test.odocl -I odocs/default/doc/test/odoc-pages/ -I odocs/default/lib/test/
   Starting link
   odocmkgen generate --package default
   odoc support-files --output-dir html
