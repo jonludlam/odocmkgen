@@ -35,9 +35,6 @@ let compile_fragment all_infos info =
             include_str;
         ];
       phony_rule ("compile-" ^ info.package) ~fdeps:[ odoc_path ] [];
-      rule
-        (Fpath.v (Format.asprintf "Makefile.%s.link" info.package))
-        ~fdeps:[ odoc_path ] [];
     ]
 
 let gen inputs =
