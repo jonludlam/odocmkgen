@@ -1,6 +1,7 @@
 (** This module is meant to be opened *)
 
 module StringMap = Map.Make (String)
+module StringSet = Set.Make (String)
 
 module Process_util = struct
   let lines_of_process p =
