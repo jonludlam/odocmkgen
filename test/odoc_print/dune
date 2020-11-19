@@ -1,0 +1,3 @@
+(executable
+ (name odoc_print)
+ (libraries odoc.odoc odoc.model_desc cmdliner yojson))
