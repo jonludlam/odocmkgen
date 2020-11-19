@@ -1,5 +1,6 @@
 (* Odoc *)
 open Listm
+open Util
 
 (** The name and optional digest of a dependency. Modules compiled with --no-alias-deps don't have
     digests for purely aliased modules, and we ignore them entirely. *)
@@ -16,11 +17,11 @@ let compile_deps file =
       [{c_unit_name; c_digest}]
     | _ -> []
   in
-  Util.lines_of_process (Format.asprintf "odoc compile-deps %a" Fpath.pp file)
+  Process_util.lines_of_process (Format.asprintf "odoc compile-deps %a" Fpath.pp file)
   >>= process_line
 
 let generate_targets odocl ty =
-  let open Util in
+  let open Process_util in
   match ty with
   | `Html -> lines_of_process (Format.asprintf "odoc html-targets %a --output-dir html" Fpath.pp odocl)
   | `Latex -> lines_of_process (Format.asprintf "odoc latex-targets %a --output-dir latex" Fpath.pp odocl)

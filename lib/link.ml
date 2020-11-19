@@ -1,8 +1,7 @@
 (** Generate linking rules *)
 
 open Listm
-
-module StringMap = Map.Make (String)
+open Util
 
 let is_hidden s =
   let len = String.length s in
@@ -11,13 +10,6 @@ let is_hidden s =
       if s.[i] = '_' && s.[i + 1] = '_' then true
       else aux (i + 1)
   in aux 0
-
-let split_packages inputs =
-  let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
-  List.fold_left
-    (fun acc inp -> StringMap.update inp.Inputs.package (f inp) acc)
-    StringMap.empty inputs
-  |> StringMap.bindings
 
 let gen_input oc ~inputs_map inp =
   let deps =
@@ -57,8 +49,8 @@ let gen oc (inputs : Inputs.t list) =
   in
   List.iter (gen_input oc ~inputs_map) link_inputs;
   (* Call generate Makefiles *)
-  split_packages inputs
-  |> List.iter (fun (package, inputs) ->
+  Inputs.split_packages inputs
+  |> StringMap.iter (fun package inputs ->
          let output_files =
            List.map (fun inp -> Fpath.to_string (Inputs.link_target inp)) inputs
          in

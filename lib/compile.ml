@@ -1,4 +1,5 @@
 open Listm
+open Util
 
 (* Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_fragment all_infos info =
@@ -26,9 +27,16 @@ let compile_fragment all_infos info =
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp (Inputs.input_file info) deps_str;
     Format.asprintf "\t@odoc compile --package %s $< %s -o %a" info.package include_str Fpath.pp odoc_path;
-    Format.asprintf "compile : %a" Fpath.pp odoc_path;
+    Format.asprintf "compile-%s : %a" info.package Fpath.pp odoc_path;
     Format.asprintf "Makefile.%s.link : %a" info.package Fpath.pp odoc_path ]
 
 let gen oc inputs =
   let print_lines = List.iter (Printf.fprintf oc "%s\n") in
-  List.iter (fun inp -> print_lines (compile_fragment inputs inp)) inputs
+  let packages = Inputs.split_packages inputs in
+  List.iter (fun inp -> print_lines (compile_fragment inputs inp)) inputs;
+  let package_rules_s =
+    List.map (fun (pkg, _) -> "compile-" ^ pkg) (StringMap.bindings packages)
+    |> String.concat " "
+  in
+  Printf.fprintf oc "compile : %s\n" package_rules_s;
+  Printf.fprintf oc ".PHONY : %s\n" package_rules_s

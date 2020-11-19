@@ -1,5 +1,7 @@
 (* opam *)
 
+open Util
+
 type package = {
   name : string;
   version : string;
@@ -19,12 +21,12 @@ let deps_of_opam_result =
 let opam_deps package =
   let open Listm in
   let cmd = Format.asprintf "opam list --required-by %a --columns=name,version --color=never --short" pp_package package in
-  Util.lines_of_process cmd >>= deps_of_opam_result
+  Process_util.lines_of_process cmd >>= deps_of_opam_result
 
 let all_opam_packages () =
   let open Listm in
   let cmd = "opam list --columns=name,version --color=never --short" in
-  Util.lines_of_process cmd >>= deps_of_opam_result
+  Process_util.lines_of_process cmd >>= deps_of_opam_result
 
 let rec calc_deps package =
   if H.mem dependencies package
