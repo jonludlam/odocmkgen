@@ -5,15 +5,12 @@ let compile_fragment all_infos info =
   (* Get the filename of the output odoc file *)
   let odoc_path = Inputs.compile_target info in
 
-  let odoc_path_result = Fpath.segs odoc_path |> List.filter (fun x -> x <> "odoc-pages") |> String.concat "/" |> Fpath.of_string in
-  let odoc_path = match odoc_path_result with | Ok r -> r | _ -> failwith "error" in
-
   (* Find by digest the [source_info] for each dependency in our source_info record *)
   let deps =
     info.deps >>= fun dep ->
     try [ List.find (fun x -> x.Inputs.digest = dep.Odoc.c_digest) all_infos ]
     with Not_found ->
-      Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp info.relpath;
+      Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp info.inppath;
       []
   in
 

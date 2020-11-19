@@ -60,61 +60,64 @@ let package_of_relpath relpath =
 
 (** Represents the necessary information about a particular compilation unit *)
 type t = {
-  name : string; (** 'Astring' *)
-
-  root : Fpath.t;   (** Root path in which this was found, e.g. /home/opam/.opam/4.10.0/lib *)
-  relpath : Fpath.t; (** Relative path to the input file within [root]. *)
-
-  digest : Digest.t; (** Digest of the compilation unit itself *)
+  name : string;  (** 'Astring' *)
+  inppath : Fpath.t;  (** Path to the input file, contains [root]. *)
+  root : Fpath.t;
+      (** Root path in which this was found, e.g. /home/opam/.opam/4.10.0/lib *)
+  reloutpath : Fpath.t;
+      (** Relative path to use for output, extension is the same as [inppath].
+          May not correspond to a input file in [root]. *)
+  digest : Digest.t;  (** Digest of the compilation unit itself *)
   package : string;  (** Package in which this file lives ("astring") *)
-  deps : Odoc.compile_dep list; (** dependencies of this file *)
+  deps : Odoc.compile_dep list;  (** dependencies of this file *)
 }
 
 let pp fmt x =
   Format.fprintf fmt "@[<v 2>{ name: %s@,root: %a@,path: %a@,digest: %s@,package:%s }@]"
-    x.name Fpath.pp x.root Fpath.pp x.relpath x.digest x.package
+    x.name Fpath.pp x.root Fpath.pp x.inppath x.digest x.package
 
-let input_file t = Fpath.(t.root // t.relpath)
+let input_file t = t.inppath
 
 (** Returns the relative path to an odoc file based on an input file. For example, given
    `/home/opam/.opam/4.10.0/lib/ocaml/compiler-libs/lambda.cmi` it will return
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
-let compile_target t = Fpath.(v "odocs" // set_ext "odoc" t.relpath)
+let compile_target t = Fpath.(v "odocs" // set_ext "odoc" t.reloutpath)
 
 (** Like [compile_target] but goes into the "odocls" directory. *)
-let link_target t = Fpath.(v "odocls" // set_ext "odocl" t.relpath)
+let link_target t = Fpath.(v "odocls" // set_ext "odocl" t.reloutpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
-let get_cm_info root file =
-  let deps = Odoc.compile_deps file in
-  let relpath =
-    match Fpath.relativize ~root file with
+let get_cm_info root inppath =
+  let deps = Odoc.compile_deps inppath in
+  let reloutpath =
+    match Fpath.relativize ~root inppath with
     | Some p -> p
     | None -> failwith "odd"
   in
-  let fname = Fpath.base relpath in
+  let fname = Fpath.base reloutpath in
   let name = String.capitalize_ascii Fpath.(to_string (rem_ext fname)) in
-  let package = package_of_relpath relpath in
+  let package = package_of_relpath reloutpath in
   match List.partition (fun d -> d.Odoc.c_unit_name = name) deps with
   | [ self ], deps ->
       let digest = self.c_digest in
-      let result = { name; root; relpath; digest; package; deps; } in
-      (* Format.eprintf "%a\n%!" pp result; *)
-      [ result ]
+      [ { name; inppath; root; reloutpath; digest; package; deps } ]
   | _ ->
       Format.eprintf "Failed to find digest for self (%s)\n%!" name;
       []
 
-let get_mld_info root file =
+let get_mld_info root inppath =
   let relpath =
-    match Fpath.relativize ~root file with
+    match Fpath.relativize ~root inppath with
     | Some p -> p
     | None -> failwith "odd"
   in
-  let fname = Fpath.base relpath in
-  let name = Format.asprintf "page-%a" Fpath.pp (Fpath.rem_ext fname) in
+  let fparent, fname = Fpath.split_base relpath in
+  (* Prefix name and output file name with "page-" *)
+  let outfname = Fpath.v ("page-" ^ Fpath.to_string fname) in
+  let name = Fpath.to_string (Fpath.rem_ext outfname) in
+  let reloutpath = Fpath.append fparent outfname in
   let package = package_of_relpath relpath in
-  [ { name; root; relpath; digest = ""; deps = []; package; } ]
+  [ { name; inppath; root; reloutpath; digest = ""; deps = []; package } ]
 
 let find_inputs ~whitelist roots =
   let roots = List.sort_uniq Fpath.compare roots in

@@ -27,8 +27,12 @@ A basic test for working with Dune's _build/install.
 
   $ odocmkgen -D _build/install -L _build/install > Makefile
   $ odocmkgen gen -D _build/install -L _build/install
-  Warning, couldn't find dep CamlinternalFormatBasics of file default/lib/test/test.cmti
-  Warning, couldn't find dep Stdlib of file default/lib/test/test.cmti
+  Warning, couldn't find dep CamlinternalFormatBasics of file _build/install/default/lib/test/test.cmti
+  Warning, couldn't find dep Stdlib of file _build/install/default/lib/test/test.cmti
 
   $ make html
+  Starting link
+  odocmkgen generate --package default
   odoc support-files --output-dir html
+  odoc html-generate odocls/default/doc/test/odoc-pages/page-test.odocl --output-dir html
+  odoc html-generate odocls/default/lib/test/test.odocl --output-dir html
