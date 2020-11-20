@@ -6,10 +6,10 @@ The driver works on compiled files:
 
   $ make html
   odocmkgen gen -L . -D .
-  Warning, couldn't find dep CamlinternalFormatBasics of file b/b.cmi
-  Warning, couldn't find dep Stdlib of file b/b.cmi
-  Warning, couldn't find dep CamlinternalFormatBasics of file a/a.cmi
-  Warning, couldn't find dep Stdlib of file a/a.cmi
+  Warning, couldn't find dep CamlinternalFormatBasics of file ./b/b.cmi
+  Warning, couldn't find dep Stdlib of file ./b/b.cmi
+  Warning, couldn't find dep CamlinternalFormatBasics of file ./a/a.cmi
+  Warning, couldn't find dep Stdlib of file ./a/a.cmi
   Starting link
   odocmkgen generate --package b
   Starting link
