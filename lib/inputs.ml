@@ -1,4 +1,5 @@
 open Listm
+open Util
 
 let contents dir =
   Sys.readdir (Fpath.to_string dir)
@@ -130,3 +131,9 @@ let find_inputs ~whitelist roots =
   if List.length whitelist > 0 then
     List.filter (fun info -> List.mem info.package whitelist) infos
   else infos
+
+let split_packages inputs =
+  let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
+  List.fold_left
+    (fun acc inp -> StringMap.update inp.package (f inp) acc)
+    StringMap.empty inputs

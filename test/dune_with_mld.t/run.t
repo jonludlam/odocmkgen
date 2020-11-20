@@ -42,4 +42,4 @@ A basic test for working with Dune's _build/install.
 Doesn't resolve but should:
 
   $ odoc_print odocls/default/doc/test/odoc-pages/page-test.odocl | jq_scan_references
-  {"`Dot":[{"`Root":["Test","`TUnknown"]},"x"]}
+  {"`Resolved":{"`Value":[{"`Identifier":{"`Root":["<root>","Test"]}},"x"]}}

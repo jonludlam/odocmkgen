@@ -1,6 +1,7 @@
 (* Odoc makefile generator *)
 
 open Mkgen
+open Util
 open Cmdliner
 
 (** Example: [conv_compose Fpath.of_string Fpath.to_string Arg.dir] *)
@@ -16,7 +17,7 @@ let conv_compose ?docv parse to_string c =
 
 (* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
 let read_lib_dir () =
-  match Util.lines_of_process "ocamlfind printconf path" with
+  match Process_util.lines_of_process "ocamlfind printconf path" with
   | [ base_dir ] -> base_dir
   | _ ->
       Format.eprintf "Failed to find ocaml lib path";

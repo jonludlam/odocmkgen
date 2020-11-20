@@ -1,8 +1,7 @@
 (** Generate linking rules *)
 
 open Listm
-
-module StringMap = Map.Make (String)
+open Util
 
 let is_hidden s =
   let len = String.length s in
@@ -12,31 +11,49 @@ let is_hidden s =
       else aux (i + 1)
   in aux 0
 
-let split_packages inputs =
-  let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
-  List.fold_left
-    (fun acc inp -> StringMap.update inp.Inputs.package (f inp) acc)
-    StringMap.empty inputs
-  |> StringMap.bindings
-
-let gen_input oc ~inputs_map inp =
-  let deps =
-    let find_input d = StringMap.find_opt d.Odoc.c_unit_name inputs_map in
-    List.filter_map find_input inp.Inputs.deps
-  in
-  let deps_odoc = List.map Inputs.compile_target deps in
+let gen_input oc ~packages ~package_deps inp =
   let deps_dirs =
-    List.map (fun p -> Fpath.(to_string (parent p))) deps_odoc
-    |> List.sort_uniq String.compare
-  and deps_odoc = List.map Fpath.to_string deps_odoc in
+    (* Parent directories of every inputs from every [package_deps]. *)
+    let fold_inputs acc inp =
+      Fpath.Set.add (Fpath.parent (Inputs.compile_target inp)) acc
+    in
+    let fold_pkgs acc pkg =
+      List.fold_left fold_inputs acc (StringMap.find pkg packages)
+    in
+    List.fold_left fold_pkgs Fpath.Set.empty package_deps |> Fpath.Set.elements
+  in
+  (* Include directories of every dependencies *)
+  let deps_inc = List.map (fun p -> "-I " ^ Fpath.to_string p) deps_dirs
+  (* Phony targets of dependencies (see {!Compile}). *)
+  and compile_pkg_deps = List.map (( ^ ) "compile-") package_deps in
   let input_file = Fpath.(to_string (Inputs.compile_target inp))
   and output_file = Fpath.(to_string (Inputs.link_target inp)) in
-  let deps_inc = List.map (( ^ ) "-I ") deps_dirs in
-  Printf.fprintf oc "%s : %s %s\n\t@odoc link $< -o $@ %s\nlink: %s\n"
+  Printf.fprintf oc "%s : %s | %s\n\t@odoc link $< -o $@ %s\nlink: %s\n"
     output_file input_file
-    (String.concat " " deps_odoc)
+    (String.concat " " compile_pkg_deps)
     (String.concat " " deps_inc)
     output_file
+
+(** Until we have a better way of resolving packages. Find package dependencies
+    by following compile deps. Then transitive dependencies are flattened. *)
+let package_deps ~inputs_map ~packages =
+  let packages_of_input acc inp =
+    let f acc dep =
+      match StringMap.find_opt dep.Odoc.c_unit_name inputs_map with
+      | Some inp -> StringSet.add inp.Inputs.package acc
+      | None -> acc
+    in
+    List.fold_left f acc inp.Inputs.deps
+  in
+  let packages_of_inputs inputs =
+    List.fold_left packages_of_input StringSet.empty inputs
+  in
+  let packages_deps = StringMap.map packages_of_inputs packages in
+  StringMap.map
+    (fun deps ->
+      let f dep acc = StringSet.union acc (StringMap.find dep packages_deps) in
+      StringSet.fold f StringSet.empty deps |> StringSet.elements)
+    packages_deps
 
 (* Ideally we would have a list of packages on which the specified package depends.
    Here we're making an assumption - that the references in the doc comments will
@@ -55,13 +72,16 @@ let gen oc (inputs : Inputs.t list) =
   let link_inputs =
     inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
   in
-  List.iter (gen_input oc ~inputs_map) link_inputs;
-  (* Call generate Makefiles *)
-  split_packages inputs
-  |> List.iter (fun (package, inputs) ->
+  let packages = Inputs.split_packages link_inputs in
+  let package_deps = package_deps ~inputs_map ~packages in
+  packages
+  |> StringMap.iter (fun package inputs ->
+         let package_deps = package :: StringMap.find package package_deps in
+         List.iter (gen_input oc ~packages ~package_deps) inputs;
          let output_files =
            List.map (fun inp -> Fpath.to_string (Inputs.link_target inp)) inputs
          in
+         (* Call generate Makefiles *)
          Printf.fprintf oc
            "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n"
            package
