@@ -127,28 +127,30 @@ let package_of_path path =
 
 let find_inputs ~whitelist roots =
   let roots = List.sort_uniq Fpath.compare roots in
+  (* Several paths can be part of the same package, avoid dupplicated doc_dir. *)
+  let visited_doc_dirs = ref Fpath.Set.empty in
   let infos =
     roots >>= fun root ->
     let files = dir_contents root in
-    let package, doc_dir =
+    let package, prefix =
       match package_of_path root with
-      | Some (pkg, prefix) ->
-          (* This directory may not exist *)
-          let doc_dir = Fpath.(prefix / "doc" / pkg) in
-          (pkg, if dir_exists doc_dir then Some doc_dir else None)
+      | Some x -> x
       | None ->
           (* In case [root] is not recognized as a package, use the basename
              instead. This may be wrong sometimes. *)
-          (Fpath.basename root, None)
+          (Fpath.basename root, Fpath.parent root)
     in
     let doc_inputs =
-      match doc_dir with
-      | Some doc_dir ->
-          get_mld_files (find_files doc_dir) >>= get_mld_info ~package doc_dir
-      | None -> []
+      (* This directory may not exist *)
+      let doc_dir = Fpath.(prefix / "doc" / package) in
+      if (not (Fpath.Set.mem doc_dir !visited_doc_dirs)) && dir_exists doc_dir
+      then (
+        visited_doc_dirs := Fpath.Set.add doc_dir !visited_doc_dirs;
+        (* [doc_dir] also contains [README.md], [CHANGES.md] and other common
+           files installed by Dune, which we ignore here. *)
+        get_mld_files (find_files doc_dir) >>= get_mld_info ~package doc_dir )
+      else []
     in
-    (* [doc_files] also contains [README.md], [CHANGES.md] and other common
-       files installed by Dune, which we ignore here. *)
     (get_cm_files files >>= get_cm_info ~package root) @ doc_inputs
   in
   if List.length whitelist > 0 then
