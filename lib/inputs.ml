@@ -10,6 +10,10 @@ let filter pred item = if pred item then [item] else []
 
 let is_dir x = Sys.is_directory (Fpath.to_string x)
 
+let dir_exists x =
+  let p = Fpath.to_string x in
+  Sys.file_exists p && Sys.is_directory p
+
 let has_ext exts f =
   List.exists (fun suffix -> Fpath.has_ext suffix f) exts
 
@@ -131,7 +135,7 @@ let find_inputs ~whitelist roots =
       | Some (pkg, prefix) ->
           (* This directory may not exist *)
           let doc_dir = Fpath.(prefix / "doc" / pkg) in
-          (pkg, if is_dir doc_dir then Some doc_dir else None)
+          (pkg, if dir_exists doc_dir then Some doc_dir else None)
       | None ->
           (* In case [root] is not recognized as a package, use the basename
              instead. This may be wrong sometimes. *)
@@ -139,7 +143,8 @@ let find_inputs ~whitelist roots =
     in
     let doc_inputs =
       match doc_dir with
-      | Some doc_dir -> find_files doc_dir >>= get_mld_info ~package doc_dir
+      | Some doc_dir ->
+          get_mld_files (find_files doc_dir) >>= get_mld_info ~package doc_dir
       | None -> []
     in
     (* [doc_files] also contains [README.md], [CHANGES.md] and other common
