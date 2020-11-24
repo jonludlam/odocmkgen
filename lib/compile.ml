@@ -20,8 +20,9 @@ let compile_fragment all_infos info =
 
   (* Odoc requires the directories in which to find the odoc files of the dependencies *)
   let include_str =
-    List.map Fpath.(fun p -> to_string (parent p)) dep_odocs
-    |> List.sort_uniq String.compare
+    List.map Fpath.parent dep_odocs
+    |> List.sort_uniq Fpath.compare
+    |> List.map (Format.asprintf "-I %a" Fpath.pp)
     |> String.concat " "
   in
 
