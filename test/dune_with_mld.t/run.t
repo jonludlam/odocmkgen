@@ -25,25 +25,31 @@ A basic test for working with Dune's _build/install.
   _build/install/default/lib/test/test.mli
   _build/install/default/lib/test/dune-package
 
-  $ odocmkgen -D _build/install -L _build/install > Makefile
-  $ odocmkgen gen -D _build/install -L _build/install
-  Warning, couldn't find dep CamlinternalFormatBasics of file _build/install/default/lib/test/test.cmti
-  Warning, couldn't find dep Stdlib of file _build/install/default/lib/test/test.cmti
+Use paths found by findlib:
+
+  $ P=$(dune exec -- ocamlfind query test)
+  $ echo "$P"
+  $TESTCASE_ROOT/_build/install/default/lib/test
+
+  $ odocmkgen -D "$P" -L "$P" > Makefile
+  $ odocmkgen gen -D "$P" -L "$P"
+  Warning, couldn't find dep CamlinternalFormatBasics of file $TESTCASE_ROOT/_build/install/default/lib/test/test.cmti
+  Warning, couldn't find dep Stdlib of file $TESTCASE_ROOT/_build/install/default/lib/test/test.cmti
 
   $ make html
-  odoc compile --package default _build/install/default/doc/test/odoc-pages/test.mld  -o odocs/default/doc/test/odoc-pages/page-test.odoc
-  odoc compile --package default _build/install/default/lib/test/test.cmti  -o odocs/default/lib/test/test.odoc
-  odoc link odocs/default/doc/test/odoc-pages/page-test.odoc -o odocls/default/doc/test/odoc-pages/page-test.odocl -I odocs/default/doc/test/odoc-pages/ -I odocs/default/lib/test/
-  odoc link odocs/default/lib/test/test.odoc -o odocls/default/lib/test/test.odocl -I odocs/default/doc/test/odoc-pages/ -I odocs/default/lib/test/
+  odoc compile --package test $TESTCASE_ROOT/_build/install/default/doc/test/odoc-pages/test.mld  -o odocs/test/odoc-pages/page-test.odoc
+  odoc compile --package test $TESTCASE_ROOT/_build/install/default/lib/test/test.cmti  -o odocs/test/test.odoc
+  odoc link odocs/test/odoc-pages/page-test.odoc -o odocls/test/odoc-pages/page-test.odocl -I odocs/test/ -I odocs/test/odoc-pages/
+  odoc link odocs/test/test.odoc -o odocls/test/test.odocl -I odocs/test/ -I odocs/test/odoc-pages/
   Starting link
-  odocmkgen generate --package default
+  odocmkgen generate --package test
   odoc support-files --output-dir html
-  odoc html-generate odocls/default/doc/test/odoc-pages/page-test.odocl --output-dir html
-  odoc html-generate odocls/default/lib/test/test.odocl --output-dir html
+  odoc html-generate odocls/test/test.odocl --output-dir html
+  odoc html-generate odocls/test/odoc-pages/page-test.odocl --output-dir html
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
 Doesn't resolve but should:
 
-  $ odoc_print odocls/default/doc/test/odoc-pages/page-test.odocl | jq_scan_references
+  $ odoc_print odocls/test/odoc-pages/page-test.odocl | jq_scan_references
   {"`Resolved":{"`Value":[{"`Identifier":{"`Root":["<root>","Test"]}},"x"]}}
