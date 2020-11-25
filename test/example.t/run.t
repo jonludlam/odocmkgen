@@ -2,10 +2,10 @@ The driver works on compiled files:
 
   $ ocamlc -I b -I a b/b.mli b/b.ml a/a.mli a/a.ml
 
-  $ odocmkgen -L a -L b -D a > Makefile
+  $ odocmkgen -- a b > Makefile
 
   $ make html
-  odocmkgen gen -L a -L b -D a
+  odocmkgen gen a b
   Warning, couldn't find dep CamlinternalFormatBasics of file a/a.cmi
   Warning, couldn't find dep Stdlib of file a/a.cmi
   Warning, couldn't find dep CamlinternalFormatBasics of file b/b.cmi
