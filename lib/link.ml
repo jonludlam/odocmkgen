@@ -66,19 +66,19 @@ let package_deps ~inputs_map ~packages =
 
    We assume that link dependencies are the same as the corresponding compile
    dependencies. *)
-let gen (inputs : Inputs.t list) =
+let gen packages =
+  let inputs = StringMap.fold (fun _ inputs acc -> inputs @ acc) packages [] in
   let inputs_map =
     StringMap.of_seq
       (Seq.map (fun inp -> (inp.Inputs.name, inp)) (List.to_seq inputs))
   in
-  (* Don't link hidden modules *)
-  let link_inputs =
-    inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
-  in
-  let packages = Inputs.split_packages link_inputs in
   let package_deps = package_deps ~inputs_map ~packages in
   StringMap.fold
     (fun package inputs acc ->
+      (* Don't link hidden modules *)
+      let inputs =
+        inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
+      in
       let package_deps = package :: StringMap.find package package_deps in
       let output_files = List.map Inputs.link_target inputs in
       let pkg_makefile =

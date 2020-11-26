@@ -38,11 +38,12 @@ let compile_fragment all_infos info =
       phony_rule ("compile-" ^ info.package) ~fdeps:[ odoc_path ] [];
     ]
 
-let gen inputs =
-  let packages = Inputs.split_packages inputs in
-  let package_rules_s =
-    List.map (fun (pkg, _) -> "compile-" ^ pkg) (StringMap.bindings packages)
+let gen packages =
+  let packages = StringMap.bindings packages in
+  let inputs =
+    List.fold_left (fun acc (_, inputs) -> inputs @ acc) [] packages
   in
+  let package_rules_s = List.map (fun (pkg, _) -> "compile-" ^ pkg) packages in
   let open Makefile in
   concat
     [
