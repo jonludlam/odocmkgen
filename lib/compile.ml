@@ -47,9 +47,7 @@ let compile_fragment ~inputs_by_digest info =
 let package_page (pkg, inputs) =
   let index_mld = Inputs.index_page_mld pkg
   and index_compiled = Inputs.index_page_odoc pkg in
-  let childs =
-    List.map (fun d -> String.lowercase_ascii d.Inputs.name) inputs
-  in
+  let childs = List.map Inputs.child_name inputs in
   let childs_args = List.flatten @@ List.map (fun c -> [ "-c"; c ]) childs in
   let open Makefile in
   concat

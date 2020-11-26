@@ -88,6 +88,11 @@ let compile_target t = Fpath.(v "odocs" / t.package // set_ext "odoc" t.reloutpa
 (** Like [compile_target] but goes into the "odocls" directory. *)
 let link_target t = Fpath.(v "odocls" / t.package // set_ext "odocl" t.reloutpath)
 
+(** Name of the unit understood by [odoc compile --child]. *)
+let child_name t =
+  (* Using [reloutpath] because it has the [page-] prefix for pages. *)
+  Fpath.(basename (rem_ext t.reloutpath))
+
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_cm_info ~package root inppath =
   let deps = Odoc.compile_deps inppath in
