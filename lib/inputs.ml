@@ -52,6 +52,14 @@ let get_cm_files files =
 (** Get mld files out of a list of files. *)
 let get_mld_files = List.filter (Fpath.has_ext ".mld")
 
+(** Name of the index page of a package, for [--parent]. *)
+let index_page_name pkg = "page-" ^ pkg
+
+let index_page_mld pkg = Fpath.(v "odocs" / pkg / (pkg ^ ".mld"))
+
+let index_page_odoc pkg =
+  Fpath.(v "odocs" / pkg / (index_page_name pkg ^ ".odoc"))
+
 (** Represents the necessary information about a particular compilation unit *)
 type t = {
   name : string;  (** 'Astring' *)

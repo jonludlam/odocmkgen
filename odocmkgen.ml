@@ -111,9 +111,33 @@ module OpamDeps = struct
 
 end
 
+module PackageIndex = struct
+  let gen pkg childs =
+    ignore childs;
+    Format.printf "{0 %s}" pkg
+
+  let pkg =
+    let doc = "The name of the package." in
+    Arg.(required & pos 0 (some string) None & info [] ~doc ~docv:"PKG")
+
+  let childs =
+    let doc = "Child modules/pages." in
+    Arg.(value & pos_all string [] & info [] ~doc ~docv:"CHILD")
+
+  let cmd = Term.(const gen $ pkg $ childs)
+
+  let info =
+    Term.info "package-index"
+      ~doc:"Generate the index page for a package. (internal)"
+end
+
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Gen.(cmd, info); Generate.(cmd, info); OpamDeps.(cmd, info)] with
-  | `Error _ ->
-    Format.pp_print_flush Format.err_formatter ();
-    exit 2
-  | _ -> ()
+  let cmds =
+    [
+      Gen.(cmd, info);
+      Generate.(cmd, info);
+      OpamDeps.(cmd, info);
+      PackageIndex.(cmd, info);
+    ]
+  and default_cmd = Default.(cmd, info) in
+  Term.exit (Term.eval_choice default_cmd cmds)

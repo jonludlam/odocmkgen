@@ -2,22 +2,28 @@ open Listm
 open Util
 
 (* Rules for compiling cm{t,ti,i} files into odoc files *)
-let compile_fragment all_infos info =
+let compile_fragment ~inputs_by_digest info =
   (* Get the filename of the output odoc file *)
   let odoc_path = Inputs.compile_target info in
 
   (* Find by digest the [source_info] for each dependency in our source_info record *)
   let deps =
     info.deps >>= fun dep ->
-    try [ List.find (fun x -> x.Inputs.digest = dep.Odoc.c_digest) all_infos ]
+    try [ StringMap.find dep.Odoc.c_digest inputs_by_digest ]
     with Not_found ->
       Format.eprintf "Warning, couldn't find dep %s of file %a\n"
         dep.Odoc.c_unit_name Fpath.pp info.inppath;
       []
   in
 
+  (* [--parent]. Must be added to the dependencies and search path (-I). *)
+  let parent_page, parent_page_path =
+    Inputs.index_page_name info.package,
+    Inputs.index_page_odoc info.package
+  in
+
   (* Get a list of odoc files for the dependencies *)
-  let dep_odocs = List.map Inputs.compile_target deps in
+  let dep_odocs = parent_page_path :: List.map Inputs.compile_target deps in
 
   (* Odoc requires the directories in which to find the odoc files of the dependencies *)
   let include_args =
@@ -32,22 +38,52 @@ let compile_fragment all_infos info =
       rule odoc_path
         ~fdeps:(Inputs.input_file info :: dep_odocs)
         [
-          cmd "odoc" $ "compile" $ "--package" $ info.package $ "$<"
+          cmd "odoc" $ "compile" $ "--parent" $ parent_page $ "$<"
           $$ include_args $ "-o" $ "$@";
         ];
       phony_rule ("compile-" ^ info.package) ~fdeps:[ odoc_path ] [];
     ]
+
+let package_page (pkg, inputs) =
+  let index_mld = Inputs.index_page_mld pkg
+  and index_compiled = Inputs.index_page_odoc pkg in
+  let childs =
+    List.map (fun d -> String.lowercase_ascii d.Inputs.name) inputs
+  in
+  let childs_args = List.flatten @@ List.map (fun c -> [ "-c"; c ]) childs in
+  let open Makefile in
+  concat
+    [
+      rule index_compiled ~fdeps:[ index_mld ]
+        [
+          cmd "odoc" $ "compile" $ "--package" $ pkg $$ childs_args $ "$<"
+          $ "-o" $ "$@";
+        ];
+      rule index_mld
+        [
+          cmd "mkdir" $ "-p" $ "$(@D)";
+          cmd ~stdout:"$@" "odocmkgen" $ "package-index" $ pkg $$ childs;
+        ];
+      phony_rule ("compile-" ^ pkg) ~fdeps:[ index_compiled ] [];
+    ]
+
+let split_digest inputs =
+  List.fold_left
+    (fun acc inp -> StringMap.add inp.Inputs.digest inp acc)
+    StringMap.empty inputs
 
 let gen packages =
   let packages = StringMap.bindings packages in
   let inputs =
     List.fold_left (fun acc (_, inputs) -> inputs @ acc) [] packages
   in
+  let inputs_by_digest = split_digest inputs in
   let package_rules_s = List.map (fun (pkg, _) -> "compile-" ^ pkg) packages in
   let open Makefile in
   concat
     [
-      concat (List.map (compile_fragment inputs) inputs);
+      concat (List.map package_page packages);
+      concat (List.map (compile_fragment ~inputs_by_digest) inputs);
       phony_rule "compile" ~deps:package_rules_s [];
     ]
 

@@ -28,7 +28,9 @@ val include_ : Fpath.t -> t
 
 val pp : Format.formatter -> t -> unit
 
-(** Create a [cmd]. Use {!($)} and {!($$)} to concatenate arguments. *)
+(** Create a [cmd]. Use {!($)} and {!($$)} to concatenate arguments.
+    [~stdin], [~stdout] and [~stderr] are also escaped but Makefile variables
+    survive it and are still working as expected (this depends on an implementation detail of . *)
 val cmd : ?stdin:string -> ?stdout:string -> ?stderr:string -> string -> cmd
 
 val ( $ ) : cmd -> string -> cmd
