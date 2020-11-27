@@ -55,6 +55,7 @@ let get_mld_files = List.filter (Fpath.has_ext ".mld")
 (** Name of the index page of a package, for [--parent]. *)
 let index_page_name pkg = "page-" ^ pkg
 
+(** Name of the index page when generated. *)
 let index_page_mld pkg = Fpath.(v "odocs" / pkg / (pkg ^ ".mld"))
 
 let index_page_odoc pkg =

@@ -44,12 +44,29 @@ let compile_fragment ~inputs_by_digest info =
       phony_rule ("compile-" ^ info.package) ~fdeps:[ odoc_path ] [];
     ]
 
+let find_user_index pkg inputs =
+  let index_name = "page-" ^ pkg in
+  List.find_opt (fun inp -> inp.Inputs.name = index_name) inputs
+
 let package_page (pkg, inputs) =
-  let index_mld = Inputs.index_page_mld pkg
-  and index_compiled = Inputs.index_page_odoc pkg in
+  let open Makefile in
+  let index_compiled = Inputs.index_page_odoc pkg in
   let childs = List.map Inputs.child_name inputs in
   let childs_args = List.flatten @@ List.map (fun c -> [ "-c"; c ]) childs in
-  let open Makefile in
+  let index_mld, index_mld_rule =
+    (* Use user's index. *)
+    match find_user_index pkg inputs with
+    | Some inp -> (inp.Inputs.inppath, concat [])
+    | None ->
+        (* Or generate one *)
+        let target = Inputs.index_page_mld pkg in
+        ( target,
+          rule target
+            [
+              cmd "mkdir" $ "-p" $ "$(@D)";
+              cmd ~stdout:"$@" "odocmkgen" $ "package-index" $ pkg $$ childs;
+            ] )
+  in
   concat
     [
       rule index_compiled ~fdeps:[ index_mld ]
@@ -57,11 +74,7 @@ let package_page (pkg, inputs) =
           cmd "odoc" $ "compile" $ "--package" $ pkg $$ childs_args $ "$<"
           $ "-o" $ "$@";
         ];
-      rule index_mld
-        [
-          cmd "mkdir" $ "-p" $ "$(@D)";
-          cmd ~stdout:"$@" "odocmkgen" $ "package-index" $ pkg $$ childs;
-        ];
+      index_mld_rule;
       phony_rule ("compile-" ^ pkg) ~fdeps:[ index_compiled ] [];
     ]
 
