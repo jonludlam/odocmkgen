@@ -42,12 +42,15 @@ Use paths found by findlib:
   'odoc' 'compile' '--package' 'test' '-c' 'page-test' '-c' 'test' 'odocs/test/test.mld' '-o' 'odocs/test/page-test.odoc'
   'odoc' 'compile' '--parent' 'page-test' '$TESTCASE_ROOT/_build/install/default/doc/test/odoc-pages/test.mld' '-I' 'odocs/test/' '-o' 'odocs/test/odoc-pages/page-test.odoc'
   'odoc' 'compile' '--parent' 'page-test' '$TESTCASE_ROOT/_build/install/default/lib/test/test.cmti' '-I' 'odocs/test/' '-o' 'odocs/test/test.odoc'
+  'odoc' 'link' 'odocs/test/page-test.odoc' '-o' 'odocls/test/page-test.odocl' '-I' 'odocs/test/' '-I' 'odocs/test/odoc-pages/'
   'odoc' 'link' 'odocs/test/odoc-pages/page-test.odoc' '-o' 'odocls/test/odoc-pages/page-test.odocl' '-I' 'odocs/test/' '-I' 'odocs/test/odoc-pages/'
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/' '-I' 'odocs/test/odoc-pages/'
   'odocmkgen' 'generate' '--package' 'test'
+  dir=test/test file=
   dir=test/test file=Test
   dir=test/test file=test
   odoc support-files --output-dir html
+  odoc html-generate odocls/test/page-test.odocl --output-dir html
   odoc html-generate odocls/test/test.odocl --output-dir html
   odoc html-generate odocls/test/odoc-pages/page-test.odocl --output-dir html
 

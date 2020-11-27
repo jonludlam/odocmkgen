@@ -60,6 +60,9 @@ let index_page_mld pkg = Fpath.(v "odocs" / pkg / (pkg ^ ".mld"))
 let index_page_odoc pkg =
   Fpath.(v "odocs" / pkg / (index_page_name pkg ^ ".odoc"))
 
+let index_page_odocl pkg =
+  Fpath.(v "odocls" / pkg / (index_page_name pkg ^ ".odocl"))
+
 (** Represents the necessary information about a particular compilation unit *)
 type t = {
   name : string;  (** 'Astring' *)

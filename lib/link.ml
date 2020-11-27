@@ -11,7 +11,7 @@ let is_hidden s =
       else aux (i + 1)
   in aux 0
 
-let gen_input ~packages ~package_deps inp =
+let gen_link ~packages ~package_deps input_file output_file =
   let deps_dirs =
     (* Parent directories of every inputs from every [package_deps]. *)
     let fold_inputs acc inp =
@@ -24,8 +24,6 @@ let gen_input ~packages ~package_deps inp =
   in
   (* Phony targets of dependencies (see {!Compile}). *)
   let compile_pkg_deps = List.map (( ^ ) "compile-") package_deps in
-  let input_file = Inputs.compile_target inp
-  and output_file = Inputs.link_target inp in
   let open Makefile in
   let inc_args =
     List.concat_map (fun dir -> [ "-I"; Fpath.to_string dir ]) deps_dirs
@@ -58,6 +56,16 @@ let package_deps ~inputs_map ~packages =
       StringSet.fold f StringSet.empty deps |> StringSet.elements)
     packages_deps
 
+let gen_input ~packages ~package_deps inp =
+  let input_file = Inputs.compile_target inp
+  and output_file = Inputs.link_target inp in
+  gen_link ~packages ~package_deps input_file output_file
+
+let package_page ~packages ~package_deps package =
+  let index_odoc = Inputs.index_page_odoc package
+  and index_odocl = Inputs.index_page_odocl package in
+  gen_link ~packages ~package_deps index_odoc index_odocl
+
 (* Ideally we would have a list of packages on which the specified package depends.
    Here we're making an assumption - that the references in the doc comments will
    only be referring to packages that are required to compile the modules. Other
@@ -80,7 +88,9 @@ let gen packages =
         inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
       in
       let package_deps = package :: StringMap.find package package_deps in
-      let output_files = List.map Inputs.link_target inputs in
+      let output_files =
+        Inputs.index_page_odocl package :: List.map Inputs.link_target inputs
+      in
       let pkg_makefile =
         Fpath.v (Format.asprintf "Makefile.%s.generate" package)
       in
@@ -89,6 +99,7 @@ let gen packages =
         [
           acc;
           concat (List.map (gen_input ~packages ~package_deps) inputs);
+          package_page ~packages ~package_deps package;
           rule pkg_makefile ~fdeps:output_files
             [ cmd "odocmkgen" $ "generate" $ "--package" $ package ];
           include_ pkg_makefile;

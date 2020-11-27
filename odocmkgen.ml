@@ -112,9 +112,18 @@ module OpamDeps = struct
 end
 
 module PackageIndex = struct
+  let string_starts str prefix =
+    let slen = String.length str and plen = String.length prefix in
+    plen <= slen && prefix = String.sub str 0 plen
+
   let gen pkg childs =
     ignore childs;
-    Format.printf "{0 %s}" pkg
+    Format.printf "{0 %s}@\n@\n" pkg;
+    List.iter
+      (fun c ->
+        let c = if string_starts c "page-" then c else "module-" ^ c in
+        Format.printf "- {!%s}@\n" c)
+      childs
 
   let pkg =
     let doc = "The name of the package." in
