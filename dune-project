@@ -4,4 +4,5 @@
 (generate_opam_files true)
 (package
  (name odocmkgen)
+ (depends astring fpath cmdliner sexplib opam-format)
  )
