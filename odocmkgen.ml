@@ -16,12 +16,7 @@ let conv_compose ?docv parse to_string c =
 
 (* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
 let read_lib_dir () =
-  let ic = Unix.open_process_in "ocamlfind printconf path" in
-  let base_dir = input_line ic in
-  match Unix.close_process_in ic with
-  | Unix.WEXITED 0 -> base_dir
-  | _ -> Format.eprintf "Failed to find ocaml lib path"; exit 1
-
+  Opam.lib ()
 
 
 module Default = struct

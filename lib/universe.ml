@@ -16,6 +16,7 @@ module T = struct
 end
 
 module S = Set.Make(T)
+module StringHashtbl = Hashtbl.Make(struct type t = string let equal x y = String.equal x y let hash x = Hashtbl.hash x end)
 
 type t = {
   id : Digest.t;
@@ -65,6 +66,10 @@ let of_packages packages =
   let id = Digest.to_hex (Digest.string str) in
   { id; packages }
 
+let package_version universe name =
+  S.fold (fun pkg acc ->
+    if pkg.Opam.name = name then Some pkg.Opam.version else acc) universe.packages None
+  
 (* Hashtbl of all package dependencies - maps from a package to a set of dependencies calculated
    via the transitive closure of all direct dependencies *)
 module H = Hashtbl.Make(T)
@@ -86,26 +91,25 @@ module Current = struct
    indexed by the name of the package that depends upon that universe *)
 
    (* Only useful for a particular switch *)
-  module H = Hashtbl.Make(struct type t = string let equal x y = String.equal x y let hash x = Hashtbl.hash x end)
-  let h = H.create 111
+  let h = StringHashtbl.create 111
 
   let init () =
     let packages = Opam.all_opam_packages () in
     List.iter (fun package ->
       let deps = calc_deps package in
       let u = (package, of_packages deps) in
-      H.add h package.name u) packages
+      StringHashtbl.add h package.name u) packages
   
   let dep_universe package =
-    if H.length h = 0 then ignore (Util.time "Depuniverse.init" init ());
-    try H.find h package
+    if StringHashtbl.length h = 0 then ignore (Util.time "Depuniverse.init" init ());
+    try StringHashtbl.find h package
     with Not_found ->
       Format.eprintf "Package '%s' not found\n%!" package;
       raise Not_found
   
   let save top =
-    if H.length h = 0 then ignore (Util.time "Depuniverse.init" init ());
-    H.iter (fun _ (package,u) ->
+    if StringHashtbl.length h = 0 then ignore (Util.time "Depuniverse.init" init ());
+    StringHashtbl.iter (fun _ (package,u) ->
       Format.eprintf "saving universe %s\n%!" u.id;
       let dir = Fpath.(top / "universes" // v u.id ) in
       Util.mkdir_p dir;
@@ -124,13 +128,13 @@ module All = struct
   module H = Hashtbl.Make(T)
 
   let v = H.create 111
-  let us = Current.H.create 111
+  let us = StringHashtbl.create 111
   let blessed = H.create 111
 
   let init () =
     let inputs = Inputs.find_files ["usexp"] Fpath.(v "prep" / "universes") in
     let universes = List.map (fun p -> load Fpath.(add_ext "usexp" p)) inputs in
-    List.iter (fun u -> Current.H.add us u.id u) universes;
+    List.iter (fun u -> StringHashtbl.add us u.id u) universes;
     let packages = Inputs.find_files ["psexp"] Fpath.(v "prep" / "universes") in
     let read_package path =
       let universe =
@@ -142,11 +146,11 @@ module All = struct
       let _ = match H.find_opt v package with
       | None ->
         Format.eprintf "Adding package %a\n%!" Opam.pp_package package;
-        H.add v package [(Current.H.find us universe)]
+        H.add v package [(StringHashtbl.find us universe)]
       | Some current ->
         Format.eprintf "Package %a exists in multiple universes! [%s]\n%!" Opam.pp_package package
-          (String.concat ";" (List.map (fun u -> u.id) (Current.H.find us universe :: current)));
-        H.replace v package (Current.H.find us universe :: current) in
+          (String.concat ";" (List.map (fun u -> u.id) (StringHashtbl.find us universe :: current)));
+        H.replace v package (StringHashtbl.find us universe :: current) in
       let _ = match H.find_opt blessed package with
       | None ->
         H.replace blessed package universe
@@ -164,7 +168,7 @@ module All = struct
       failwith "bah"
 
   let find_universe u =
-    Current.H.find us u
+    StringHashtbl.find us u
 
   let is_blessed p u =
     H.find blessed p = u
