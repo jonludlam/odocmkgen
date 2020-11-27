@@ -15,7 +15,7 @@ type source_info = {
   root : Fpath.t; (** Root path in which this was found *)
   file : Fpath.t; (** Original file *)
   name : string; (** 'Astring' *)
-  dir : Fpath.t; (** relative dir below package path *)
+  dir : Fpath.t; (** relative dir below root *)
   fname : Fpath.t; (* filename with extension *)
   package : Opam.package; (* Package in which this file lives ("astring") *)
   universe : Universe.t
@@ -51,25 +51,36 @@ let package_of_relpath relpath =
     List.find exists file_preference
   
   (* Get info given a base file (cmt, cmti or cmi) *)
-  let get_info root mod_file =
+  let get_info root package mod_file =
     let file = best_source_file mod_file in
     let (_, lname) = Fpath.split_base mod_file in
     let name = String.capitalize_ascii (Fpath.to_string lname) in
     let relpath = match Fpath.relativize ~root file with Some p -> p | None -> failwith "odd" in
-    let package_name, (dir, fname) = package_of_relpath relpath in
+    let dir, fname = Fpath.split_base relpath in
     try
-      let dep_universe = Universe.Current.dep_universe package_name in
+      let dep_universe = Universe.Current.dep_universe package.Opam.name in
       let (package, universe) = dep_universe in
       [{root; file; name; dir; package; fname; universe}]
     with _ ->
       []
 
-let run whitelist roots =
+let run whitelist _roots =
+  let packages = Opam.all_opam_packages () in
+  let root = Opam.lib () |> Fpath.v in
+  let pkg_contents = List.map (fun pkg ->
+    (pkg, Opam.pkg_contents pkg.Opam.name)) packages in
+
   let infos =
-    roots >>= fun root ->
-    Inputs.find_files ["cmi";"cmt";"cmti"] root
-    >>= get_info root
+    List.map
+      (fun (pkg, files) ->
+        List.filter (Inputs.has_ext ["cmi";"cmt";"cmti"]) files |>
+        List.map Fpath.rem_ext |>
+        setify |>
+        List.map (get_info root pkg)) pkg_contents
+    |> List.flatten |> List.flatten
   in
+
+
   let infos =
     if List.length whitelist > 0
     then List.filter (fun info -> List.mem info.package.name whitelist) infos

@@ -64,5 +64,21 @@ let all_opam_packages () =
   let cmd = Format.asprintf "opam list --switch %s --columns=name,version --color=never --short" (get_switch ()) in
   Util.lines_of_process cmd >>= deps_of_opam_result
 
+let lib () =
+  let cmd = Format.asprintf "opam var --switch %s lib" (get_switch ()) in
+  Util.lines_of_process cmd |> List.hd
+
+let prefix () =
+  let cmd = Format.asprintf "opam var --switch %s prefix" (get_switch ()) in
+  Util.lines_of_process cmd |> List.hd
+
+let pkg_contents pkg =
+  let prefix = prefix () in
+  let changes_file = Format.asprintf "%s/.opam-switch/install/%s.changes" prefix pkg in
+  let ic = open_in changes_file in
+  let changed = OpamFile.Changes.read_from_channel ic in
+  close_in ic;
+  let added = OpamStd.String.Map.fold (fun file x acc -> match x with OpamDirTrack.Added _ -> file :: acc | _ -> acc) changed [] in
+  List.map (fun path -> Fpath.(v prefix // v path)) added
 
 
