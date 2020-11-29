@@ -1,8 +1,10 @@
 open Listm
 
+
+
 let with_open_dir d f =
   let dh = Unix.opendir (Fpath.to_string d) in
-  Fun.protect
+  Util.protect
     ~finally:(fun () -> Unix.closedir dh)
     (fun () ->
       f dh)

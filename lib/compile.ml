@@ -70,7 +70,7 @@ let get_info universe package root mod_file =
   let fname = best_source_file mod_file in
   let deps = Odoc.compile_deps fname in
   let (_, lname) = Fpath.split_base mod_file in
-  let name = String.capitalize_ascii (Fpath.to_string lname) in
+  let name = String.capitalize (Fpath.to_string lname) in
   let dir = match Fpath.relativize ~root fname with Some p -> p | None -> failwith "odd" in
   try
     match List.partition (fun d -> d.Odoc.c_unit_name = name) deps with
@@ -112,7 +112,7 @@ let subdir_mld_odoc parent name ty =
   in
   let mld = Fpath.(basedir // f) in
   let child =
-    match Hashtbl.find_opt pages mld with
+    match try Some (Hashtbl.find pages mld) with _ -> None with
     | Some p -> p
     | None ->
       let p = 
@@ -177,8 +177,8 @@ let mld_contents mld =
       List.map (fun child -> Format.asprintf "%a" child_format child) children
   | Universe id ->
     let universe = Universe.All.find_universe id in
-    let packs = Universe.S.to_seq universe.Universe.packages in
-    let lines = Seq.fold_left (fun lines package ->
+    let packs = Universe.S.elements universe.Universe.packages in
+    let lines = List.fold_left (fun lines package ->
       (Format.asprintf "%a" Opam.pp_package package)::lines) [] packs in
     [ Printf.sprintf "{0 Universe %s}" id;
       "{1 Contents}";
@@ -196,7 +196,7 @@ let mld_contents mld =
     in
     let interpose_alphabet packages =
       let alpha_heading name =
-        Printf.sprintf "{2 %c}" (Char.uppercase_ascii name.[0])
+        Printf.sprintf "{2 %c}" (Char.uppercase name.[0])
       in
       
       let rec inner ps =
@@ -231,11 +231,10 @@ let parent_mld_fragment all_infos =
     let parent = version_page info in
     set_child parent (CU info)
   ) all_infos;
-  let parent_file = Hashtbl.to_seq pages in
   let odocl_file trio =
     Fpath.set_ext "odocl" trio.odoc
   in
-  let map_fn cur (_, mld) =
+  let map_fn _ mld cur =
     let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
     let (path,_) = Fpath.split_base mld.mld in
     Util.mkdir_p path;
@@ -246,7 +245,7 @@ let parent_mld_fragment all_infos =
 
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
       Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "--parent %a" Fpath.pp page.odoc) mld.parent
-        (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase_ascii p.name)) children));
+        (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase p.name)) children));
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
         (List.map (function
@@ -257,7 +256,7 @@ let parent_mld_fragment all_infos =
       Format.asprintf "link: %a" Fpath.pp (odocl_file mld)
         ] :: cur
     in
-  Seq.fold_left map_fn [] parent_file |> List.concat
+  Hashtbl.fold map_fn pages [] |> List.concat
 
 
 

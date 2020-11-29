@@ -9,14 +9,14 @@ module T = struct
     | n -> n
   
   let equal x y =
-    String.equal x.Opam.name y.Opam.name && String.equal x.version y.version
+    String.compare x.Opam.name y.Opam.name = 0 && String.compare x.version y.version = 0
 
   let hash x =
     Hashtbl.hash (x.Opam.name, x.version)
 end
 
 module S = Set.Make(T)
-module StringHashtbl = Hashtbl.Make(struct type t = string let equal x y = String.equal x y let hash x = Hashtbl.hash x end)
+module StringHashtbl = Hashtbl.Make(struct type t = string let equal x y = String.compare x y = 0 let hash x = Hashtbl.hash x end)
 
 type t = {
   id : Digest.t;
@@ -61,8 +61,8 @@ let load fname =
     of_string str
 
 let of_packages packages =
-  let s = S.to_seq packages in
-  let str = Seq.fold_left (fun acc p -> Format.asprintf "%s\n%a" acc Opam.pp_package p) "" s in
+  let s =  S.elements packages in
+  let str = List.fold_left (fun acc p -> Format.asprintf "%s\n%a" acc Opam.pp_package p) "" s in
   let id = Digest.to_hex (Digest.string str) in
   { id; packages }
 
@@ -143,7 +143,7 @@ module All = struct
         | _ -> failwith "bad path"
       in
       let package = Opam.load (Fpath.add_ext "psexp" path) in
-      let _ = match H.find_opt v package with
+      let _ = match try Some (H.find v package) with _ -> None with
       | None ->
         Format.eprintf "Adding package %a\n%!" Opam.pp_package package;
         H.add v package [(StringHashtbl.find us universe)]
@@ -151,7 +151,7 @@ module All = struct
         Format.eprintf "Package %a exists in multiple universes! [%s]\n%!" Opam.pp_package package
           (String.concat ";" (List.map (fun u -> u.id) (StringHashtbl.find us universe :: current)));
         H.replace v package (StringHashtbl.find us universe :: current) in
-      let _ = match H.find_opt blessed package with
+      let _ = match try Some (H.find blessed package) with _ -> None with
       | None ->
         H.replace blessed package universe
       | Some _ -> ()
@@ -161,11 +161,9 @@ module All = struct
     List.iter read_package packages
 
   let find_package_universe u p =
-    match H.find_opt v p with
-    | Some universes ->
+    match H.find v p with
+    | universes ->
       List.find (fun u' -> u'.id = u) universes
-    | None ->
-      failwith "bah"
 
   let find_universe u =
     StringHashtbl.find us u

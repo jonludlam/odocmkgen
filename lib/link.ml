@@ -93,7 +93,7 @@ let run _toppath package =
         let dir = fst (Fpath.split_base file) in
 
         (* Find the corresponding entry in the map of package dependencies odoc has calculated *)
-        let deps = Option.get @@ Fpath.Map.find dir odoc_deps in
+        let deps = match Fpath.Map.find dir odoc_deps with Some x -> x | None -> failwith "odoc_deps" in
 
         (* Extract the packages and remove duplicates *)
         let dep_packages = setify @@ List.map (fun dep -> (dep.Odoc.l_package, dep.l_version, dep.l_universe)) deps in

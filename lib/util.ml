@@ -1,5 +1,14 @@
 (* util.ml *)
 
+let protect ~finally f =
+  try
+    let result = f () in
+    finally ();
+    result
+  with e ->
+    finally ();
+    raise e
+
 let lines_of_channel ic =
   let rec inner acc =
     try
@@ -10,7 +19,7 @@ let lines_of_channel ic =
 
 let lines_of_process p =
     let ic = Unix.open_process_in p in
-    Fun.protect
+    protect
       ~finally:(fun () -> ignore(Unix.close_process_in ic))
       (fun () -> lines_of_channel ic)
 

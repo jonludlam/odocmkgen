@@ -22,7 +22,7 @@ let pp_link_dep fmt l =
   
 let lines_of_process p =
   let ic = Unix.open_process_in p in
-  let lines = Fun.protect
+  let lines = Util.protect
     ~finally:(fun () -> ignore(Unix.close_process_in ic))
     (fun () ->
       let rec inner acc =

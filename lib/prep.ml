@@ -54,7 +54,7 @@ let package_of_relpath relpath =
   let get_info root package mod_file =
     let file = best_source_file mod_file in
     let (_, lname) = Fpath.split_base mod_file in
-    let name = String.capitalize_ascii (Fpath.to_string lname) in
+    let name = String.capitalize (Fpath.to_string lname) in
     let relpath = match Fpath.relativize ~root file with Some p -> p | None -> failwith "odd" in
     let dir, fname = Fpath.split_base relpath in
     try
