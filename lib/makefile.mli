@@ -1,12 +1,36 @@
+(** This module is meant to be opened locally. *)
+
 type t
+(** A fragment of a Makefile *)
+
+type cmd
 
 val concat : t list -> t
 
+val rule :
+  Fpath.t ->
+  ?fdeps:Fpath.t list ->
+  ?deps:string list ->
+  ?oo_deps:string list ->
+  cmd list ->
+  t
 (** [oo_deps] is order-only dependencies. *)
-val rule : Fpath.t -> ?fdeps:Fpath.t list -> ?deps:string list -> ?oo_deps:string list -> string list -> t
 
-val phony_rule : string -> ?fdeps:Fpath.t list -> ?deps:string list -> ?oo_deps:string list -> string list -> t
+val phony_rule :
+  string ->
+  ?fdeps:Fpath.t list ->
+  ?deps:string list ->
+  ?oo_deps:string list ->
+  cmd list ->
+  t
 
 val include_ : Fpath.t -> t
 
 val pp : Format.formatter -> t -> unit
+
+(** Create a [cmd]. Use {!($)} and {!($$)} to concatenate arguments. *)
+val cmd : ?stdin:string -> ?stdout:string -> ?stderr:string -> string -> cmd
+
+val ( $ ) : cmd -> string -> cmd
+
+val ( $$ ) : cmd -> string list -> cmd
