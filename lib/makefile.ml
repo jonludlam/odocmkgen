@@ -5,12 +5,17 @@ type rule = {
   recipe : string list;
 }
 
+type cmd = string list -> string
+
 type t = Rule of rule | Concat of t list | Include of string
+
+let cmd_to_string cmd = cmd []
 
 let concat ts = Concat ts
 
 let rule' target ?(fdeps = []) ?(deps = []) ?(oo_deps = []) recipe =
   let deps = List.map Fpath.to_string fdeps @ deps in
+  let recipe = List.map cmd_to_string recipe in
   Rule { target; deps; oo_deps; recipe }
 
 let rule target ?fdeps ?deps ?oo_deps recipe =
@@ -48,3 +53,10 @@ let rec pp fmt = function
       let pp_sep = Format.pp_print_newline in
       Format.pp_print_list ~pp_sep pp fmt ts
   | Include p -> pp_include fmt p
+
+let cmd ?stdin ?stdout ?stderr cmd acc =
+  Filename.quote_command cmd ?stdin ?stdout ?stderr acc
+
+let ( $ ) cmd arg acc = cmd (arg :: acc)
+
+let ( $$ ) cmd args acc = cmd (args @ acc)

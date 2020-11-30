@@ -27,11 +27,13 @@ let gen_input ~packages ~package_deps inp =
   let input_file = Inputs.compile_target inp
   and output_file = Inputs.link_target inp in
   let open Makefile in
-  let pp_deps_inc fmt = List.iter (Format.fprintf fmt " -I %a" Fpath.pp) in
+  let inc_args =
+    List.concat_map (fun dir -> [ "-I"; Fpath.to_string dir ]) deps_dirs
+  in
   concat
     [
       rule output_file ~fdeps:[ input_file ] ~oo_deps:compile_pkg_deps
-        [ Format.asprintf "odoc link $< -o $@%a" pp_deps_inc deps_dirs ];
+        [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ];
       phony_rule "link" ~fdeps:[ output_file ] [];
     ]
 
@@ -88,7 +90,7 @@ let gen (inputs : Inputs.t list) =
           acc;
           concat (List.map (gen_input ~packages ~package_deps) inputs);
           rule pkg_makefile ~fdeps:output_files
-            [ "odocmkgen generate --package " ^ package ];
+            [ cmd "odocmkgen" $ "generate" $ "--package" $ package ];
           include_ pkg_makefile;
         ])
     packages (Makefile.concat [])
