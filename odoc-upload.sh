@@ -3,7 +3,7 @@
 set -e -x
 
 cd prep/universes
-for i in $(find . -type d -maxdepth 1 -mindepth 1 | cut -c3); do
+for i in $(find . -type d -maxdepth 1 -mindepth 1 | cut -c3- ); do
   for j in $(find $i -type d -maxdepth 2 -mindepth 2); do
     fname=$(echo $j | sed sx/x_xg)
     echo $fname
