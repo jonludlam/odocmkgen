@@ -58,10 +58,8 @@ let package_of_relpath relpath =
     let relpath = match Fpath.relativize ~root file with Some p -> p | None -> failwith "odd" in
     let dir, fname = Fpath.split_base relpath in
     try
-      let (package, universe) = Universe.Current.dep_universe package.Opam.name in
-      if package.Opam.name = "ocaml" then begin
-        Format.eprintf "ocaml: universe=%a\n%!" Universe.pp universe
-      end;
+      let (_, universe) = Universe.Current.dep_universe package.Opam.name in
+      Format.eprintf "%a: universe=%a\n%!" Opam.pp_package package Universe.pp universe;
       [{root; file; name; dir; package; fname; universe}]
     with _ ->
       []
