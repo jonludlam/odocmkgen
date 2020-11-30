@@ -8,3 +8,9 @@
  (public_name odocmkgen)
  (modules odocmkgen)
  (libraries astring compiler-libs.common unix fpath result mkgen cmdliner))
+
+(install
+ (files odoc-upload.sh)
+ (section bin)
+ (package odocmkgen))
+
