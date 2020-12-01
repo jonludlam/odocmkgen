@@ -34,14 +34,14 @@ let lines_of_process p =
   in
   lines
 
-let compile_deps file =
+let compile_deps version file =
   let process_line line =
     match Astring.String.cuts ~sep:" " line with
     | [c_unit_name; c_digest] ->
       [{c_unit_name; c_digest}]
     | _ -> []
   in
-  lines_of_process (Format.asprintf "odoc compile-deps %a" Fpath.pp file)
+  lines_of_process (Format.asprintf "/Users/jon/.opam/%s/bin/odoc compile-deps %a" version Fpath.pp file)
   >>= process_line
 
 let link_deps dir =

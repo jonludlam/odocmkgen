@@ -68,7 +68,16 @@ let best_source_file base_path =
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_info universe package root mod_file =
   let fname = best_source_file mod_file in
-  let deps = Odoc.compile_deps fname in
+  let v =
+    if package.Opam.name = "ocaml"
+    then package.version
+    else
+      match Universe.package_version universe "ocaml" with
+      | Some v -> v
+      | None ->
+        Format.eprintf "Failed to find ocaml dependency for package %a (universe id %s)" Opam.pp_package package universe.Universe.id;
+        failwith "erk" in
+  let deps = Odoc.compile_deps v fname in
   let (_, lname) = Fpath.split_base mod_file in
   let name = String.capitalize (Fpath.to_string lname) in
   let dir = match Fpath.relativize ~root fname with Some p -> p | None -> failwith "odd" in
@@ -156,7 +165,7 @@ let version_page info =
   subdir_mld_odoc (Some (package_page info)) v_str Version
 
 let odoc_file_of_info info =
-  Fpath.((version_page info).dir // set_ext "odoc" info.fname)
+  Fpath.((version_page info).dir // set_ext "odoc" (v info.name))
 
 module StringSet = Set.Make(String)
 
@@ -235,7 +244,7 @@ let parent_mld_fragment all_infos =
     Fpath.set_ext "odocl" trio.odoc
   in
   let map_fn _ mld cur =
-    let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
+    let children = (* List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) )*) mld.children in
     let (path,_) = Fpath.split_base mld.mld in
     Util.mkdir_p path;
     let oc = open_out (Fpath.to_string mld.mld) in
@@ -244,7 +253,7 @@ let parent_mld_fragment all_infos =
     close_out oc;
 
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
-      Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "--parent %a" Fpath.pp page.odoc) mld.parent
+      Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "-I %a --parent %s" Fpath.pp (Fpath.split_base page.odoc |> fst) page.mldname) mld.parent
         (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase p.name)) children));
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
@@ -283,26 +292,34 @@ let compile_fragment all_infos info =
   let parent_trio = version_page info in
   let dep_odocs = Fpath.to_string parent_trio.odoc :: dep_odocs in
 
+  let ocaml_version =
+      match (Universe.package_version info.universe "ocaml") with
+      | Some v -> v
+      | None ->
+          if info.package.name = "ocaml"
+          then info.package.version
+          else failwith "No ocaml version!" in
+
   (* Odoc requires the directories in which to find the odoc files of the dependencies *)
   let dep_dirs = Fpath.Set.of_list @@ List.map (fun i -> (version_page i).dir) deps in
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
-    Format.asprintf "\todoc compile --parent %a $< %s -o %a" Fpath.pp parent_trio.odoc include_str Fpath.pp odoc_path;
+    Format.asprintf "\t/Users/jon/.opam/%s/bin/odoc compile --parent %s -I %a $< %s -o %a" ocaml_version parent_trio.mldname Fpath.pp (Fpath.split_base parent_trio.odoc |> fst) include_str Fpath.pp odoc_path;
     Format.asprintf "compile : %a" Fpath.pp odoc_path;
     Format.asprintf "Makefile.link : %a" Fpath.pp odoc_path ]
 
 (* Rule for generating Makefile.<package>.link *)
 let link_fragment all_infos =
-  let packages = List.map (fun info -> info.package) all_infos |> setify in
+  let packages = List.map (fun info -> info.package.name) all_infos |> setify in
   (* For each package, this rule is to generate a Makefile containing the runes to perform the link.
      It requires all of the package's files to have been compiled first. *)
   List.map (fun package ->
-      let infos = List.filter (fun info -> info.package = package) all_infos in
+      let infos = List.filter (fun info -> info.package.name = package) all_infos in
       let odocs = String.concat " " (List.map (fun info -> odoc_file_of_info info |> Fpath.to_string) infos) in
-      [ Format.asprintf "-include Makefile.%s.link" package.Opam.name;
-        Format.asprintf "Makefile.%s.link: %s" package.name odocs;
-        Format.asprintf "\todocmkgen link --package %s" package.name ]        
+      [ Format.asprintf "-include Makefile.%s.link" package;
+        Format.asprintf "Makefile.%s.link: %s" package odocs;
+        Format.asprintf "\todocmkgen link --package %s" package ]        
     ) packages
 
 let universe_path id =
