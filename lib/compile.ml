@@ -18,10 +18,19 @@ let pp fmt s =
     Fpath.pp s.root s.name Fpath.pp s.dir Fpath.pp s.fname s.digest Opam.pp_package s.package (String.concat "," (List.map (fun o -> o.Odoc.c_unit_name) s.deps))
     s.blessed s.universe.id
 
-
-  type mldchild =
+module MLDChild = struct
+type t =
   | Mld of Fpath.t
   | CU of source_info
+let compare t1 t2 =
+  match t1, t2 with
+  | Mld p1, Mld p2 -> Fpath.compare p1 p2
+  | CU s1, CU s2 -> Digest.compare s1.digest s2.digest
+  | Mld _, CU _ -> 1
+  | CU _, Mld _ -> -1
+end
+
+module ChildSet = Set.Make(MLDChild)
 
 type mldtype =
   | Packages
@@ -35,7 +44,7 @@ and mld = {
   dir: Fpath.t;
   mld: Fpath.t;
   odoc: Fpath.t;
-  children : mldchild list;
+  children : ChildSet.t;
   parent : Fpath.t option;
   ty : mldtype;
 }
@@ -102,16 +111,15 @@ let pages = Hashtbl.create 100
 let is_blessed info =
   info.universe.id = "d41d8cd98f00b204e9800998ecf8427e" && info.package.name = "ocaml" && info.package.version = "4.11.1"
 
-let pp_mlchild fmt = function | CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
+let pp_mlchild fmt = function | MLDChild.CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
 
 let overall_basedir = Fpath.v "compile"
 
 let set_child parent child =
   let p = Hashtbl.find pages parent.mld in
-  Format.eprintf "Setting parent: %a to have child: %a\n%!" Fpath.pp parent.mld pp_mlchild child;
-  if not (List.mem child p.children)
-  then Hashtbl.replace pages parent.mld {p with children = child :: p.children}
-  else Format.eprintf "(skipping)\n%!"
+  if not (ChildSet.mem child p.children)
+  then Hashtbl.replace pages parent.mld { p with children = ChildSet.add child p.children }
+  else ()
 
 let subdir_mld_odoc parent name ty =
   let f = Fpath.v (Printf.sprintf "%s.mld" name) in
@@ -129,7 +137,7 @@ let subdir_mld_odoc parent name ty =
           dir = Fpath.(basedir // v name);
           mld;
           odoc = Fpath.(basedir // v (Printf.sprintf "page-%s.odoc" name));
-          children = [];
+          children = ChildSet.empty;
           parent = (match parent with Some pparent -> Some pparent.mld | None -> None);
           ty }
       in
@@ -168,16 +176,16 @@ let odoc_file_of_info info =
   Fpath.((version_page info).dir // set_ext "odoc" (v info.name))
 
 module StringSet = Set.Make(String)
-
+module StringMap = Map.Make(String)
 
 let mld_contents mld =
   let child_format fmt = function
-  | CU info -> Format.fprintf fmt "{!child:%s}\n" info.name
+  | MLDChild.CU info -> Format.fprintf fmt "{!child:%s}\n" info.name
   | Mld m ->
     let page = Hashtbl.find pages m in
     Format.fprintf fmt "{!child:%s}\n" page.mldname
   in
-  let children = List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) ) mld.children in
+  let children = ChildSet.fold (fun c acc -> match c with | MLDChild.Mld _ -> c::acc | CU info -> if is_hidden info.fname then acc else c::acc) mld.children [] in
   match mld.ty with
   | Universes ->
     [ "{0 Universes}";
@@ -198,7 +206,7 @@ let mld_contents mld =
       ] @ List.map (fun child -> Format.asprintf "%a" child_format child) children
   | Packages ->
     let name = function
-      | CU info -> info.name
+      | MLDChild.CU info -> info.name
       | Mld m ->
         let page = Hashtbl.find pages m in
         page.mldname
@@ -244,7 +252,7 @@ let parent_mld_fragment all_infos =
     Fpath.set_ext "odocl" trio.odoc
   in
   let map_fn _ mld cur =
-    let children = (* List.filter (function | Mld _ -> true | CU info -> not (is_hidden info.fname) )*) mld.children in
+    let children = ChildSet.fold (fun c acc -> c::acc) mld.children [] in
     let (path,_) = Fpath.split_base mld.mld in
     Util.mkdir_p path;
     let oc = open_out (Fpath.to_string mld.mld) in
@@ -254,33 +262,43 @@ let parent_mld_fragment all_infos =
 
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
       Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "-I %a --parent %s" Fpath.pp (Fpath.split_base page.odoc |> fst) page.mldname) mld.parent
-        (String.concat " " (List.map (function | Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase p.name)) children));
+        (String.concat " " (List.map (function | MLDChild.Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase p.name)) children));
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
         (List.map (function
-          | Mld p -> let page = Hashtbl.find pages p in page.odoc
+          | MLDChild.Mld p -> let page = Hashtbl.find pages p in page.odoc
           | CU p -> odoc_file_of_info p) children);
       Format.asprintf "\todoc link %a -o %a %a" Fpath.pp mld.odoc Fpath.pp (odocl_file mld)
-        (Format.pp_print_list (fun fmt p -> Format.fprintf fmt "-I %a" Fpath.pp p)) (List.sort_uniq compare (List.map (fun p -> let p' = match p with Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p in fst (Fpath.split_base p')) children));
+        (Format.pp_print_list (fun fmt p -> Format.fprintf fmt "-I %a" Fpath.pp p)) (List.sort_uniq compare (List.map (fun p -> let p' = match p with MLDChild.Mld p -> let page = Hashtbl.find pages p in page.odoc | CU p -> odoc_file_of_info p in fst (Fpath.split_base p')) children));
       Format.asprintf "link: %a" Fpath.pp (odocl_file mld)
         ] :: cur
     in
   Hashtbl.fold map_fn pages [] |> List.concat
 
+let total = ref 0
+let n = ref 0
 
 
 (* Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_fragment all_infos info =
   (* Get the filename of the output odoc file *)
   let odoc_path = odoc_file_of_info info in
-
+  incr n;
+  Format.eprintf "[%d/%d]\n%!" !n !total;
   (* Find by digest the [source_info] for each dependency in our source_info record *)
   let deps =
     info.deps >>= fun dep ->
-    try [ List.find (fun x -> x.digest = dep.Odoc.c_digest && Universe.S.subset x.universe.packages info.universe.packages) all_infos ]
-    with Not_found ->
-      Format.eprintf "Warning, couldn't find dep %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname));
+    match StringMap.find dep.Odoc.c_digest all_infos with
+    | exception Not_found ->
+      Format.eprintf "Warning, couldn't find deps %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname));
       []
+    | l ->
+      let result = List.filter (fun x -> Universe.S.subset x.universe.packages info.universe.packages) l in
+      if List.length result <> 1
+      then
+        (Format.eprintf "Warning, couldn't find deps %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname)); [])
+      else
+        result
   in
 
   (* Get a list of odoc files for the dependencies *)
@@ -329,6 +347,7 @@ let packages_path id =
   Fpath.(universe_path id // v "packages.usexp")
   
 let read_universe id =
+  Format.eprintf "Reading universe: %s\n%!" id;
   let universe = Universe.load (packages_path id) in
   Inputs.(contents (universe_path id) >>= filter is_dir) >>= fun package_path ->
   Inputs.(contents package_path >>= filter is_dir) >>= fun version_path ->
@@ -342,17 +361,25 @@ let read_universe id =
 
 let run _whitelist _roots =
   Universe.All.init ();
-  let infos = Inputs.contents Fpath.(v "prep" / "universes") >>= fun universe_fpath ->
+  let infos = Inputs.contents Fpath.(v "prep" / "universes") |> List.sort Fpath.compare >>= fun universe_fpath ->
     match Fpath.segs universe_fpath with
     | ["prep"; "universes"; id] ->
       read_universe id
     | _ -> []
   in
-  let lines = List.concat (List.map (compile_fragment infos) infos) in
+  let infos_map = List.fold_left (fun map info ->
+    StringMap.update info.digest
+      (function
+      | None -> Some [info]
+      | Some xs -> Some (info :: xs)) map) StringMap.empty infos
+  in
+  let infos_s = List.to_seq infos in
+  total := List.length infos;
+  let lines = Seq.map (compile_fragment infos_map) infos_s in
   let oc = open_out "Makefile.gen" in
-  List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
-  let lines = List.concat (link_fragment infos) in
-  List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
+  Seq.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
+  let lines = link_fragment infos in
+  List.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
   close_out oc;
