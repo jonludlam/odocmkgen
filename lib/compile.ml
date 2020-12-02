@@ -367,7 +367,7 @@ let run _whitelist _roots =
       read_universe id
     | _ -> []
   in
-  let infos_map = List.fold_left (fun map info ->
+  (* let infos_map = List.fold_left (fun map info ->
     StringMap.update info.digest
       (function
       | None -> Some [info]
@@ -382,6 +382,6 @@ let run _whitelist _roots =
   List.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
-  close_out oc;
-
+  close_out oc; *)
+  ignore(infos);
   ()
