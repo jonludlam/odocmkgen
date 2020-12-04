@@ -49,29 +49,123 @@ let paths_of_package all_files (package,version,universe) =
 
 let extra = ["conduit",["compile/packages/conduit_lwt_unix/2_2_2/"; "compile/packages/conduit_async/2_1_0/"; "compile/packages/conduit_mirage/2_2_1/"]]
 
+module M = Map.Make(String)
+
+type files = {
+  dirs : Fpath.t list;
+  files : Fpath.t list
+}
+type versions = {
+  versions : files M.t (* Indexed by version *)
+}
+
+type packages = {
+  packages : versions M.t (* Indexed by package name *)
+}
+
+type all = {
+  universed : packages M.t; (* Indexed by universe *)
+  non_universed : packages;
+}
+
+let empty_all = {
+  universed = M.empty;
+  non_universed = { packages = M.empty } }
+
+let empty_packages = {
+  packages = M.empty;
+}
+
+let empty_versions = {
+  versions = M.empty;
+}
+
+let empty_files =
+  { dirs = []; files = [] }
+
 let run _toppath package =
     (* Find all odoc files, result is list of Fpath.t with no extension *) 
     let all_files = Inputs.find_files ["odoc"] Fpath.(v "compile") in
 
-    let pkg_ver_files = filter_by_package all_files package in
+    let sorted = List.sort Fpath.compare all_files in
+  
+    let u_of f =
+      let (_, file) = Fpath.split_base f in
+      if Astring.String.is_prefix ~affix:"page-" (Fpath.to_string file)
+      then None
+      else
+        let segs = Fpath.segs f in 
+          match segs with
+          | "compile" :: "universes" :: u :: pkg :: version :: _ ->
+            Some (Some u, pkg, version, f)
+          | "compile" :: "packages" :: pkg :: version :: _ ->
+            Some (None, pkg, version, f)
+          | _ ->
+            None      
+    in
 
-    let versions = List.sort_uniq (fun v1 v2 -> String.compare v1 v2)
-      (List.map
-        (fun f ->
-          match Fpath.segs f with
-          | "compile" :: "universes" :: _ :: _pkg :: version :: _ -> version
-          | "compile" :: "packages" :: _pkg :: version :: _ -> version
-          | _ -> failwith "bad path")
-        pkg_ver_files)
+    let all = List.filter_map u_of sorted in
+
+    let h =
+      let rec inner all packages versions files fs =
+        let update_files f =
+          let dir = fst @@ Fpath.split_base f in
+          if List.mem dir files.dirs
+          then { files with files = f :: files.files }
+          else { files = f :: files.files; dirs = dir :: files.dirs }
+        in
+        let update_versions v f =
+          let files = update_files f in
+          { versions = M.add v files versions.versions }
+        in
+        let update_packages p v f =
+          let versions = update_versions v f in
+          { packages = M.add p versions packages.packages }
+        in
+        let update_universe u p v f =
+          let packages = update_packages p v f in
+          match u with
+          | None -> {all with non_universed = packages }
+          | Some u -> {all with universed = M.add u packages all.universed }
+        in
+        match fs with
+        | [(u, p, v, f)] ->
+          update_universe u p v f
+        | (u, p, v, f) :: ((u2, _, _, _) as xx) :: rest when u <> u2 ->
+          let all = update_universe u p v f in
+          inner all empty_packages empty_versions empty_files (xx::rest)
+        | (_, p, v, f) :: ((_, p2, _, _) as xx) :: rest when p <> p2 ->
+          let packages = update_packages p v f in
+          inner all packages empty_versions empty_files (xx::rest)
+        | (_, _, v, f) :: ((_, _, v2, _) as xx) :: rest when v <> v2 ->
+          let versions = update_versions v f in
+          inner all packages versions empty_files (xx::rest)
+        | (_, _, _, f) :: rest ->
+          let files = update_files f in
+          inner all packages versions files rest
+        | [] -> empty_all
+        in inner empty_all empty_packages empty_versions empty_files all
     in
 
     let package_makefile = Printf.sprintf "Makefile.%s.link" package in
 
     let oc = open_out package_makefile in
 
-    let output_files_lists = List.map (fun version ->
+    let all_versions =
+      M.fold (fun _ p acc ->
+        match M.find_opt package p.packages with
+        | Some s -> s::acc
+        | None -> acc) h.universed
+      (match M.find_opt package h.non_universed.packages with
+      | Some p -> [p] | None -> []) in
 
-      let pkg_files = filter_by_version pkg_ver_files version in
+    let _ =
+      all_versions |>
+      List.iter (fun versions ->
+        versions.versions |> 
+        M.iter (fun _version files ->
+
+            let pkg_files = files.files in
     (* get rid of hidden files *)
       let files = pkg_files >>= filter (fun f -> not (is_hidden f)) in
 
@@ -88,9 +182,8 @@ let run _toppath package =
       Format.eprintf "odoc_deps: %a\n%!"
         (Fpath.Map.pp (fun fmt (path,packages) -> Format.fprintf fmt "@[<v>dir: %a@,[@[<v>%a@]]@]" Fpath.pp path (Format.pp_print_list ~pp_sep:Format.pp_print_cut Odoc.pp_link_dep) packages)) odoc_deps;
 
-
-
-      List.map (fun file ->
+      let iterfn file =
+        Format.eprintf "handling file: %a\n%!" Fpath.pp file;
         (* The directory containing the odoc file *)
         let dir = fst (Fpath.split_base file) in
 
@@ -105,8 +198,15 @@ let run _toppath package =
         Format.eprintf "dep packages: [%s]\n%!" (String.concat "," (List.map (fun (p,v,u) -> Printf.sprintf "%s %s %s" p v (match u with Some u -> Printf.sprintf "(%s)" u | None -> "")) dep_packages));
         (* Find the directories that contain these packages - note the mapping of package -> 
           directory is one-to-many *)
-        let dirs = setify @@ dep_packages >>= fun package -> paths_of_package all_files package in
-        
+        let dirs = setify @@ dep_packages >>= fun (p, v, u_opt) ->
+          let versions =
+            match u_opt with
+            | None ->
+              (M.find p h.non_universed.packages).versions
+            | Some u ->
+              (M.find p (M.find u h.universed).packages).versions in
+          (M.find v versions).dirs
+        in
         let output_file = match Fpath.segs file with
           | "compile" :: rest -> Fpath.(v (String.concat dir_sep ("link" :: rest)))
           | path :: _ -> Format.eprintf "odoc file unexpectedly found in path %s\n%!" path;
@@ -122,11 +222,9 @@ let run _toppath package =
             Fpath.pp output_file
         in
 
-      Printf.fprintf oc "%s" str;
-      output_file
-      ) files) versions in
-    let all_output_files = List.concat output_files_lists in
-    Printf.fprintf oc "Makefile.%s.generate: %s\n\todocmkgen generate --package %s\n" package (String.concat " " (List.map (fun f -> Fpath.(to_string (add_ext "odocl" f))) all_output_files)) package;
-    Printf.fprintf oc "-include Makefile.%s.generate\n" package;
+        Printf.fprintf oc "%s" str
+      in
+      List.iter iterfn files))
+    in
     close_out oc
     

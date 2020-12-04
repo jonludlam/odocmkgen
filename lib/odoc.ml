@@ -35,16 +35,35 @@ let lines_of_process p =
   lines
 
 let compile_deps version file =
+  let deps_file = Fpath.add_ext "deps" file in
   let process_line line =
     match Astring.String.cuts ~sep:" " line with
-    | [c_unit_name; c_digest] ->
-      [{c_unit_name; c_digest}]
-    | _ -> []
+  | [c_unit_name; c_digest] ->
+    [{c_unit_name; c_digest}]
+  | _ -> []
   in
-  lines_of_process (Format.asprintf "/Users/jon/.opam/%s/bin/odoc compile-deps %a" version Fpath.pp file)
-  >>= process_line
+  let exists = Sys.file_exists (Fpath.to_string deps_file) in
+  let lines =
+    if exists
+    then begin
+      let ic = open_in (Fpath.to_string deps_file) in
+      let lines = Util.lines_of_channel ic in
+      close_in ic;
+      lines
+    end else begin
+      let lines = lines_of_process (Format.asprintf "/Users/jon/.opam/%s/bin/odoc compile-deps %a" version Fpath.pp file) in
+      let tmp_file = Fpath.to_string (Fpath.add_ext "tmp" deps_file) in
+      let oc = open_out tmp_file in
+      List.iter (fun l -> Printf.fprintf oc "%s\n" l) lines;
+      close_out oc;
+      Unix.rename tmp_file (Fpath.to_string deps_file);
+      lines
+    end
+  in
+  lines >>= process_line
 
 let link_deps dir =
+  let deps_file = Fpath.(dir / "deps") in
   let process_line line =
     Format.eprintf "line: %s\n%!" line;
     match Astring.String.cuts ~sep:" " line with
@@ -58,8 +77,25 @@ let link_deps dir =
       end
     | _ -> []
   in
-  lines_of_process (Format.asprintf "odoc link-deps %a" Fpath.pp dir)
-  >>= process_line
+  let exists = Sys.file_exists (Fpath.to_string deps_file) in
+  let lines =
+    if exists
+    then begin
+      let ic = open_in (Fpath.to_string deps_file) in
+      let lines = Util.lines_of_channel ic in
+      close_in ic;
+      lines
+    end else begin
+      let lines = lines_of_process (Format.asprintf "odoc link-deps %a" Fpath.pp dir) in
+      let tmp_file = Fpath.to_string (Fpath.add_ext "tmp" deps_file) in
+      let oc = open_out tmp_file in
+      List.iter (fun l -> Printf.fprintf oc "%s\n" l) lines;
+      close_out oc;
+      Unix.rename tmp_file (Fpath.to_string deps_file);
+      lines
+    end
+  in
+  lines >>= process_line
 
 let generate_targets odocl ty =
   match ty with

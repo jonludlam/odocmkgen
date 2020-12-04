@@ -9,15 +9,15 @@ let paths_of_package all_files package =
   in
   setify all_paths
 
-let run path package =
+let run _path package =
   let package_makefile = Printf.sprintf "Makefile.%s.generate" package in
 
-  let all_files = Inputs.find_files ["odocl"] path in
+(*  let all_files = Inputs.find_files ["odocl"] path in
 
-  let pkg_files = paths_of_package all_files package in
-
+  let _pkg_files = paths_of_package all_files package in
+*)
   let oc = open_out package_makefile in
-
+(* 
   let mk format =
     List.iter
       (fun f ->
@@ -28,11 +28,11 @@ let run path package =
         let str = Format.asprintf "%s : %s\n" str_format (String.concat " " targets) in
         Printf.fprintf oc "%s" str
         ) pkg_files;
-  in
+  in *)
 
-  mk `Html;
+  (* mk `Html;
   mk `Latex;
-  mk `Man;
+  mk `Man; *)
 
   close_out oc
 

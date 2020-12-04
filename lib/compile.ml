@@ -78,7 +78,7 @@ let best_source_file base_path =
 let get_info universe package root mod_file =
   let fname = best_source_file mod_file in
   let v =
-    if package.Opam.name = "ocaml"
+    if package.Opam.name = "ocaml" || package.Opam.name = "ocaml-base-compiler"
     then package.version
     else
       match Universe.package_version universe "ocaml" with
@@ -262,7 +262,7 @@ let parent_mld_fragment all_infos =
 
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
       Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "-I %a --parent %s" Fpath.pp (Fpath.split_base page.odoc |> fst) page.mldname) mld.parent
-        (String.concat " " (List.map (function | MLDChild.Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" (String.lowercase p.name)) children));
+        (String.concat " " (List.map (function | MLDChild.Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" p.name) children));
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
         (List.map (function
@@ -314,7 +314,7 @@ let compile_fragment all_infos info =
       match (Universe.package_version info.universe "ocaml") with
       | Some v -> v
       | None ->
-          if info.package.name = "ocaml"
+          if info.package.name = "ocaml" || info.package.name = "ocaml-base-compiler"
           then info.package.version
           else failwith "No ocaml version!" in
 
@@ -352,7 +352,7 @@ let read_universe id =
   Inputs.(contents (universe_path id) >>= filter is_dir) >>= fun package_path ->
   Inputs.(contents package_path >>= filter is_dir) >>= fun version_path ->
   let package = Opam.load (Fpath.(version_path / "package.psexp")) in
-  Inputs.find_files ["cmi";"cmt";"cmti"] version_path
+  Inputs.find_files ["cmi";"cmt";"cmti"] version_path |> List.filter (fun f -> let segs = Fpath.segs f in not (List.mem ".private" segs))
   >>= get_info universe package version_path
 
 
@@ -367,7 +367,7 @@ let run _whitelist _roots =
       read_universe id
     | _ -> []
   in
-  (* let infos_map = List.fold_left (fun map info ->
+  let infos_map = List.fold_left (fun map info ->
     StringMap.update info.digest
       (function
       | None -> Some [info]
@@ -382,6 +382,6 @@ let run _whitelist _roots =
   List.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
-  close_out oc; *)
+  close_out oc;
   ignore(infos);
   ()
