@@ -56,7 +56,7 @@ let deps_of_opam_result =
 let dependencies package =
   let open Listm in
   if package.name = "ocaml" then [] else
-  let cmd = Format.asprintf "opam list --switch %s --installed --required-by %a --columns=name,version --color=never --short" (get_switch ()) pp_package package in
+  let cmd = Format.asprintf "opam list --switch %s --installed --required-by %a --depopts --columns=name,version --color=never --short" (get_switch ()) pp_package package in
   Util.lines_of_process cmd >>= deps_of_opam_result |> List.filter (fun p -> not @@ List.mem p.name ["ocaml-system"; "ocaml-variants"])
 
 let all_opam_packages () =
