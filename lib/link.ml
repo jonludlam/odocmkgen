@@ -214,7 +214,7 @@ let run _toppath package =
         let str =
           Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
             Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
-            (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
+            (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) (dir::dirs)))
             Fpath.pp output_file
         in
 

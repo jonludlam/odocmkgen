@@ -108,12 +108,9 @@ let get_info universe package root mod_file =
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
 let pages = Hashtbl.create 100
 
-let is_blessed info =
-  info.universe.id = "d41d8cd98f00b204e9800998ecf8427e" && info.package.name = "ocaml" && info.package.version = "4.11.1"
-
 let pp_mlchild fmt = function | MLDChild.CU _ -> Format.fprintf fmt "CU" | Mld p -> Format.fprintf fmt "%a" Fpath.pp p
 
-let overall_basedir = Fpath.v "compile"
+let compile_basedir = Fpath.v "compile"
 
 let set_child parent child =
   let p = Hashtbl.find pages parent.mld in
@@ -124,7 +121,7 @@ let set_child parent child =
 let subdir_mld_odoc parent name ty =
   let f = Fpath.v (Printf.sprintf "%s.mld" name) in
   let basedir = match parent with
-    | None -> overall_basedir
+    | None -> compile_basedir
     | Some p -> p.dir
   in
   let mld = Fpath.(basedir // f) in
@@ -174,6 +171,9 @@ let version_page info =
 
 let odoc_file_of_info info =
   Fpath.((version_page info).dir // set_ext "odoc" (v info.name))
+
+let odocl_file_of_info info =
+  Fpath.((version_page info).dir // set_ext "odocl" (v info.name))
 
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
@@ -278,22 +278,14 @@ let parent_mld_fragment all_infos =
 let total = ref 0
 let n = ref 0
 
-
-(* Rules for compiling cm{t,ti,i} files into odoc files *)
-let compile_fragment all_infos info =
-  (* Get the filename of the output odoc file *)
-  let odoc_path = odoc_file_of_info info in
-  incr n;
-  Format.eprintf "[%d/%d]\n%!" !n !total;
-  (* Find by digest the [source_info] for each dependency in our source_info record *)
-  let deps =
+let get_deps all_infos info =
     info.deps >>= fun dep ->
     match StringMap.find dep.Odoc.c_digest all_infos with
     | exception Not_found ->
       Format.eprintf "Warning 1, couldn't find deps %s of file %a from universe %s\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname)) info.universe.Universe.id;
       []
     | l ->
-      let own_universe = List.filter (fun x -> x.universe.id = info.universe.id) l in
+      let own_universe = List.filter (fun x -> x.package = info.package && x.universe.id = info.universe.id) l in
       match own_universe with
       | [l] -> [l]
       | _::_ as xs -> begin
@@ -309,14 +301,61 @@ let compile_fragment all_infos info =
       | [] ->
         let result = List.filter (fun x -> Universe.S.subset x.universe.packages info.universe.packages) l in
         let sorted = List.sort (fun x2 x1 -> compare (Universe.S.cardinal x1.universe.Universe.packages) (Universe.S.cardinal x2.universe.Universe.packages)) result in
-        [List.hd sorted]
-  in
+        try
+          [List.hd sorted]
+        with _ -> []
+
+
+module PH = Hashtbl.Make(struct
+        type t = (Opam.package * Digest.t)
+
+        let equal (p1,d1) (p2,d2) = Digest.equal d1 d2 && p1.Opam.name = p2.Opam.name && p1.version = p2.version
+        let hash (p,d) = Hashtbl.hash (d, p.Opam.name, p.Opam.version)
+      end)
+
+      module PH2 = Hashtbl.Make(struct
+        type t = Opam.package
+
+        let equal p1 p2 = p1.Opam.name = p2.Opam.name && p1.version = p2.version
+        let hash p = Hashtbl.hash (p.Opam.name, p.Opam.version)
+      end)
+(* Map of package to deps *)
+let packages = PH.create 100
+let infos = PH2.create 100
+
+(* Rules for compiling cm{t,ti,i} files into odoc files *)
+let compile_fragment all_infos info =
+  (* Get the filename of the output odoc file *)
+  let odoc_path = odoc_file_of_info info in
+  incr n;
+  Format.eprintf "[%d/%d]\n%!" !n !total;
+  (* Find by digest the [source_info] for each dependency in our source_info record *)
+  let deps = get_deps all_infos info in
 
   (* Get a list of odoc files for the dependencies *)
   let dep_odocs = List.map (fun info ->
     let odoc_file = odoc_file_of_info info in
     Fpath.to_string odoc_file) deps
   in
+
+  begin
+    let key = info.package, info.universe.id in
+    let value = List.map (fun dep -> (dep.package, dep.universe.id)) deps |> setify in
+    begin
+      match PH.find packages key with
+      | exception Not_found ->
+        PH.replace packages key value
+      | xs ->
+        PH.replace packages key (setify (xs @ value))
+    end;
+    begin
+      match PH2.find infos info.package with
+      | exception Not_found ->
+          PH2.replace infos info.package [info]
+      | xs ->
+          PH2.replace infos info.package (info :: xs)
+    end;
+  end;
 
   let parent_trio = version_page info in
   let dep_odocs = Fpath.to_string parent_trio.odoc :: dep_odocs in
@@ -338,18 +377,82 @@ let compile_fragment all_infos info =
     Format.asprintf "compile : %a" Fpath.pp odoc_path;
     Format.asprintf "Makefile.link : %a" Fpath.pp odoc_path ]
 
+
+let stamp_of_package pkg universe = 
+  Format.asprintf ".compile_%s_%a" universe Opam.pp_package pkg
+
+let compile_stamps all_infos =
+  PH.fold (fun (package, universe_id) _deps acc ->
+    let stamp = stamp_of_package package universe_id in
+    let infos = List.filter (fun i -> i.package=package && i.universe.id = universe_id) all_infos in
+    let odoc_files = List.map (fun i -> odoc_file_of_info i |> Fpath.to_string) infos in
+    [ Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files);
+      "\ttouch $<" ] :: acc
+  )
+
 (* Rule for generating Makefile.<package>.link *)
 let link_fragment all_infos =
-  let packages = List.map (fun info -> info.package.name) all_infos |> setify in
-  (* For each package, this rule is to generate a Makefile containing the runes to perform the link.
-     It requires all of the package's files to have been compiled first. *)
-  List.map (fun package ->
-      let infos = List.filter (fun info -> info.package.name = package) all_infos in
-      let odocs = String.concat " " (List.map (fun info -> odoc_file_of_info info |> Fpath.to_string) infos) in
-      [ Format.asprintf "-include Makefile.%s.link" package;
-        Format.asprintf "Makefile.%s.link: %s" package odocs;
-        Format.asprintf "\todocmkgen link --package %s" package ]        
-    ) packages
+  PH.fold (fun (package, universe_id) deps acc ->
+    let deps = setify ((package, universe_id) :: deps) in
+    let extra =
+      begin
+        let u = Universe.All.find_universe universe_id in
+        let missing =
+          Universe.S.fold (fun pkg acc->
+          if not (List.exists (fun (pkg',_) -> pkg = pkg') deps)
+          then begin
+            match PH2.find infos pkg with
+            | exception Not_found -> acc
+            | _ -> pkg :: acc 
+          end else acc ) u.Universe.packages []
+        in
+        if List.length missing > 0
+        then begin
+          Format.eprintf "Missing dependencies for package %a in universe %s\n%!" Opam.pp_package package universe_id;
+          let extra =
+            List.map (fun pkg ->
+              let infos = PH2.find infos pkg in
+              let universes = List.map (fun info -> info.universe.id) infos |> setify in
+              Format.eprintf "Found %d infos for pkg %a in universes: %a\n%!" (List.length infos) Opam.pp_package pkg (Format.pp_print_list Format.pp_print_string) universes;
+              let infos = List.filter (fun i ->
+                Universe.S.subset
+                  (Universe.S.add i.package i.universe.packages) u.packages) infos in
+              let sorted = List.sort (fun i1 i2 -> compare (Universe.S.cardinal i1.universe.packages) (Universe.S.cardinal i2.universe.packages)) infos in
+              try
+                let universe = (List.hd sorted).universe.id in
+                Ok (pkg, universe)
+              with _ ->
+                Error pkg
+              ) missing
+          in
+          List.iter (fun m ->
+            match m with
+            | Ok (pkg, id) -> Format.eprintf "  Resolved dep - %a in universe %s\n%!" Opam.pp_package pkg id;
+            | Error pkg -> Format.eprintf "  Unresolved dependency - %a\n%!" Opam.pp_package pkg) extra;
+          List.filter_map (fun x -> match x with | Ok x -> Some x | _ -> None) extra
+        end
+        else []
+      end
+    in
+    let deps = deps @ extra in
+    let universes = StringSet.of_list (List.map (fun (_, id) -> id) deps) in
+    let infos = List.filter (fun i -> i.package = package && i.universe.id = universe_id && not (is_hidden i.fname)) all_infos in
+    let deps = List.filter (fun i ->
+      (StringSet.mem i.universe.id universes) &&
+      (List.exists (fun (p, u) -> i.package = p && u = i.universe.id) deps)) all_infos in
+    let dep_dirs = setify @@ (List.map (fun dep -> let (dir, _) = Fpath.split_base (odoc_file_of_info dep) in Fpath.to_string dir) deps) in
+    let include_str = "-I " ^ (String.concat "-I " dep_dirs) in
+    let result =
+      List.map (fun info ->
+        let odocl_file = odocl_file_of_info info in
+        let odoc_file = odoc_file_of_info info in
+        [ Format.asprintf "%a : %s" Fpath.pp odocl_file
+          (String.concat " "
+            (List.map (fun i -> Format.asprintf "%a" Fpath.pp (odoc_file_of_info i)) deps));
+          Format.asprintf "\todoc link %a %s -o %a" Fpath.pp odoc_file include_str Fpath.pp odocl_file; ]) infos
+      in (Format.asprintf "# XXXXXX Package: %a universe %s" Opam.pp_package package) universe_id :: (List.flatten result) @ acc
+    
+    ) packages []
 
 let universe_path id =
   Fpath.(v "prep" / "universes" / id)
@@ -389,8 +492,8 @@ let run _whitelist _roots =
   let lines = Seq.map (compile_fragment infos_map) infos_s in
   let oc = open_out "Makefile.gen" in
   Seq.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
-  let lines = link_fragment infos in
-  List.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
+  let links = link_fragment infos in
+  List.iter (fun line -> Printf.fprintf oc "%s\n" line) links;
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
   close_out oc;
