@@ -382,17 +382,25 @@ let stamp_of_package pkg universe =
   Format.asprintf ".compile_%s_%a" universe Opam.pp_package pkg
 
 let compile_stamps all_infos =
+  let cardinal = PH.length packages in
+  let n = ref 0 in
   PH.fold (fun (package, universe_id) _deps acc ->
+    incr n;
+    Format.eprintf "stamp: [%d/%d]\n%!" !n cardinal;
     let stamp = stamp_of_package package universe_id in
     let infos = List.filter (fun i -> i.package=package && i.universe.id = universe_id) all_infos in
     let odoc_files = List.map (fun i -> odoc_file_of_info i |> Fpath.to_string) infos in
-    [ Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files);
-      "\ttouch $<" ] :: acc
-  )
+    ( Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files)) ::
+      "\ttouch $<" :: acc
+  ) packages []
 
 (* Rule for generating Makefile.<package>.link *)
 let link_fragment all_infos =
+  let cardinal = PH.length packages in
+  let n = ref 0 in
   PH.fold (fun (package, universe_id) deps acc ->
+    incr n;
+    Format.eprintf "link: [%d/%d]\n%!" !n cardinal;
     let deps = setify ((package, universe_id) :: deps) in
     let extra =
       begin
@@ -408,12 +416,12 @@ let link_fragment all_infos =
         in
         if List.length missing > 0
         then begin
-          Format.eprintf "Missing dependencies for package %a in universe %s\n%!" Opam.pp_package package universe_id;
+          (* Format.eprintf "Missing dependencies for package %a in universe %s\n%!" Opam.pp_package package universe_id; *)
           let extra =
             List.map (fun pkg ->
               let infos = PH2.find infos pkg in
-              let universes = List.map (fun info -> info.universe.id) infos |> setify in
-              Format.eprintf "Found %d infos for pkg %a in universes: %a\n%!" (List.length infos) Opam.pp_package pkg (Format.pp_print_list Format.pp_print_string) universes;
+              (* let universes = List.map (fun info -> info.universe.id) infos |> setify in *)
+              (* Format.eprintf "Found %d infos for pkg %a in universes: %a\n%!" (List.length infos) Opam.pp_package pkg (Format.pp_print_list Format.pp_print_string) universes; *)
               let infos = List.filter (fun i ->
                 Universe.S.subset
                   (Universe.S.add i.package i.universe.packages) u.packages) infos in
@@ -425,10 +433,10 @@ let link_fragment all_infos =
                 Error pkg
               ) missing
           in
-          List.iter (fun m ->
+          (* List.iter (fun m ->
             match m with
             | Ok (pkg, id) -> Format.eprintf "  Resolved dep - %a in universe %s\n%!" Opam.pp_package pkg id;
-            | Error pkg -> Format.eprintf "  Unresolved dependency - %a\n%!" Opam.pp_package pkg) extra;
+            | Error pkg -> Format.eprintf "  Unresolved dependency - %a\n%!" Opam.pp_package pkg) extra; *)
           List.filter_map (fun x -> match x with | Ok x -> Some x | _ -> None) extra
         end
         else []
@@ -440,15 +448,15 @@ let link_fragment all_infos =
     let deps = List.filter (fun i ->
       (StringSet.mem i.universe.id universes) &&
       (List.exists (fun (p, u) -> i.package = p && u = i.universe.id) deps)) all_infos in
-    let dep_dirs = setify @@ (List.map (fun dep -> let (dir, _) = Fpath.split_base (odoc_file_of_info dep) in Fpath.to_string dir) deps) in
+    let dep_pkgs = setify @@ List.map (fun dep -> dep.package, dep.universe.id) deps in
+    let dep_dirs = setify @@ List.map (fun dep -> let (dir, _) = Fpath.split_base (odoc_file_of_info dep) in Fpath.to_string dir) deps in
     let include_str = "-I " ^ (String.concat "-I " dep_dirs) in
     let result =
       List.map (fun info ->
         let odocl_file = odocl_file_of_info info in
         let odoc_file = odoc_file_of_info info in
         [ Format.asprintf "%a : %s" Fpath.pp odocl_file
-          (String.concat " "
-            (List.map (fun i -> Format.asprintf "%a" Fpath.pp (odoc_file_of_info i)) deps));
+          (String.concat " " (List.map (fun (p, id) -> stamp_of_package p id) dep_pkgs));
           Format.asprintf "\todoc link %a %s -o %a" Fpath.pp odoc_file include_str Fpath.pp odocl_file; ]) infos
       in (Format.asprintf "# XXXXXX Package: %a universe %s" Opam.pp_package package) universe_id :: (List.flatten result) @ acc
     
@@ -492,6 +500,9 @@ let run _whitelist _roots =
   let lines = Seq.map (compile_fragment infos_map) infos_s in
   let oc = open_out "Makefile.gen" in
   Seq.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
+  let compile_stamps = compile_stamps infos in
+  List.iter (fun line -> Printf.fprintf oc "%s\n" line) compile_stamps;
+
   let links = link_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) links;
   let lines = parent_mld_fragment infos in
