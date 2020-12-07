@@ -290,15 +290,26 @@ let compile_fragment all_infos info =
     info.deps >>= fun dep ->
     match StringMap.find dep.Odoc.c_digest all_infos with
     | exception Not_found ->
-      Format.eprintf "Warning, couldn't find deps %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname));
+      Format.eprintf "Warning 1, couldn't find deps %s of file %a from universe %s\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname)) info.universe.Universe.id;
       []
     | l ->
-      let result = List.filter (fun x -> Universe.S.subset x.universe.packages info.universe.packages) l in
-      if List.length result <> 1
-      then
-        (Format.eprintf "Warning, couldn't find deps %s of file %a\n" dep.Odoc.c_unit_name Fpath.pp (Fpath.(info.dir // info.fname)); [])
-      else
-        result
+      let own_universe = List.filter (fun x -> x.universe.id = info.universe.id) l in
+      match own_universe with
+      | [l] -> [l]
+      | _::_ as xs -> begin
+        match List.filter (fun (x : source_info) -> x.dir = info.dir) xs with
+        | [x] -> [x]
+        | _ ->
+        List.iter (fun info ->
+          Format.eprintf "universe: %s file: %a\n%!"
+            info.universe.Universe.id
+            Fpath.pp (Fpath.(info.dir // info.fname))) xs;
+          failwith "Erk!"
+        end
+      | [] ->
+        let result = List.filter (fun x -> Universe.S.subset x.universe.packages info.universe.packages) l in
+        let sorted = List.sort (fun x2 x1 -> compare (Universe.S.cardinal x1.universe.Universe.packages) (Universe.S.cardinal x2.universe.Universe.packages)) result in
+        [List.hd sorted]
   in
 
   (* Get a list of odoc files for the dependencies *)

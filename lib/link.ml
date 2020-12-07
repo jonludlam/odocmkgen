@@ -47,7 +47,6 @@ let paths_of_package all_files (package,version,universe) =
   let dirs = List.map get_dir package_files in
   setify dirs
 
-let extra = ["conduit",["compile/packages/conduit_lwt_unix/2_2_2/"; "compile/packages/conduit_async/2_1_0/"; "compile/packages/conduit_mirage/2_2_1/"]]
 
 module M = Map.Make(String)
 
@@ -193,8 +192,6 @@ let run _toppath package =
         (* Extract the packages and remove duplicates *)
         let dep_packages = setify @@ List.map (fun dep -> (dep.Odoc.l_package, dep.l_version, dep.l_universe)) deps in
 
-        let dep_package_extra = try List.assoc package extra with _ -> [] in
-
         Format.eprintf "dep packages: [%s]\n%!" (String.concat "," (List.map (fun (p,v,u) -> Printf.sprintf "%s %s %s" p v (match u with Some u -> Printf.sprintf "(%s)" u | None -> "")) dep_packages));
         (* Find the directories that contain these packages - note the mapping of package -> 
           directory is one-to-many *)
@@ -215,10 +212,9 @@ let run _toppath package =
             exit 1
         in
         let str =
-          Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s %s\nlink: %a.odocl\n%!"
+          Format.asprintf "%a.odocl : %a.odoc\n\t@odoc link %a.odoc -o %a.odocl %s\nlink: %a.odocl\n%!"
             Fpath.pp output_file Fpath.pp file Fpath.pp file Fpath.pp output_file
             (String.concat " " (List.map (fun dir -> Format.asprintf "-I %a" Fpath.pp dir) dirs))
-            (String.concat " " (List.map (fun extra -> Format.asprintf "-I %s" extra) dep_package_extra))
             Fpath.pp output_file
         in
 
