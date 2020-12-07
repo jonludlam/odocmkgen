@@ -450,14 +450,15 @@ let link_fragment all_infos =
       (List.exists (fun (p, u) -> i.package = p && u = i.universe.id) deps)) all_infos in
     let dep_pkgs = setify @@ List.map (fun dep -> dep.package, dep.universe.id) deps in
     let dep_dirs = setify @@ List.map (fun dep -> let (dir, _) = Fpath.split_base (odoc_file_of_info dep) in Fpath.to_string dir) deps in
-    let include_str = "-I " ^ (String.concat "-I " dep_dirs) in
+    let include_str = "-I " ^ (String.concat " -I " dep_dirs) in
     let result =
       List.map (fun info ->
         let odocl_file = odocl_file_of_info info in
         let odoc_file = odoc_file_of_info info in
         [ Format.asprintf "%a : %s" Fpath.pp odocl_file
           (String.concat " " (List.map (fun (p, id) -> stamp_of_package p id) dep_pkgs));
-          Format.asprintf "\todoc link %a %s -o %a" Fpath.pp odoc_file include_str Fpath.pp odocl_file; ]) infos
+          Format.asprintf "\todoc link %a %s -o %a" Fpath.pp odoc_file include_str Fpath.pp odocl_file;
+          Format.asprintf "link : %a\n%!" Fpath.pp odocl_file]) infos
       in (Format.asprintf "# XXXXXX Package: %a universe %s" Opam.pp_package package) universe_id :: (List.flatten result) @ acc
     
     ) packages []
