@@ -263,6 +263,7 @@ let parent_mld_fragment all_infos =
     [ Format.asprintf "%a : %a %s" Fpath.pp mld.odoc Fpath.pp mld.mld (match mld.parent with | None -> "" | Some p -> let page = Hashtbl.find pages p in Format.asprintf "%a" Fpath.pp page.odoc);
       Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld (fun fmt -> function | None -> () | Some p -> let page = Hashtbl.find pages p in Format.fprintf fmt "-I %a --parent %s" Fpath.pp (Fpath.split_base page.odoc |> fst) page.mldname) mld.parent
         (String.concat " " (List.map (function | MLDChild.Mld p -> let page = Hashtbl.find pages p in Format.asprintf "--child %s" page.mldname | CU p -> Format.asprintf "--child %s" p.name) children));
+      Format.asprintf "compile : %a" Fpath.pp mld.odoc;
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
         (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt " ") Fpath.pp)
         (List.map (function
@@ -273,7 +274,8 @@ let parent_mld_fragment all_infos =
       Format.asprintf "link: %a" Fpath.pp (odocl_file mld)
         ] :: cur
     in
-  Hashtbl.fold map_fn pages [] |> List.concat
+  let result = Hashtbl.fold map_fn pages [] |> List.concat in
+  ".PHONY: compile link" :: result
 
 let total = ref 0
 let n = ref 0
@@ -287,17 +289,7 @@ let get_deps all_infos info =
     | l ->
       let own_universe = List.filter (fun x -> x.package = info.package && x.universe.id = info.universe.id) l in
       match own_universe with
-      | [l] -> [l]
-      | _::_ as xs -> begin
-        match List.filter (fun (x : source_info) -> x.dir = info.dir) xs with
-        | [x] -> [x]
-        | _ ->
-        List.iter (fun info ->
-          Format.eprintf "universe: %s file: %a\n%!"
-            info.universe.Universe.id
-            Fpath.pp (Fpath.(info.dir // info.fname))) xs;
-          failwith "Erk!"
-        end
+      | l::_ -> [l]
       | [] ->
         let result = List.filter (fun x -> Universe.S.subset x.universe.packages info.universe.packages) l in
         let sorted = List.sort (fun x2 x1 -> compare (Universe.S.cardinal x1.universe.Universe.packages) (Universe.S.cardinal x2.universe.Universe.packages)) result in
@@ -319,9 +311,16 @@ module PH = Hashtbl.Make(struct
         let equal p1 p2 = p1.Opam.name = p2.Opam.name && p1.version = p2.version
         let hash p = Hashtbl.hash (p.Opam.name, p.Opam.version)
       end)
+
+
+let stamp_of_package pkg universe = 
+  Format.asprintf ".compile_%s_%a" universe Opam.pp_package pkg
+      
 (* Map of package to deps *)
-let packages = PH.create 100
-let infos = PH2.create 100
+let packages = PH.create 30000
+let infos = PH2.create 30000
+
+(* let fragments = PH.create 30000 *)
 
 (* Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_fragment all_infos info =
@@ -333,10 +332,16 @@ let compile_fragment all_infos info =
   let deps = get_deps all_infos info in
 
   (* Get a list of odoc files for the dependencies *)
-  let dep_odocs = List.map (fun info ->
-    let odoc_file = odoc_file_of_info info in
-    Fpath.to_string odoc_file) deps
+  let dep_odocs = List.map (fun i ->
+    if info.package = i.package
+    then
+      let odoc_file = odoc_file_of_info i in
+      Fpath.to_string odoc_file
+    else
+      stamp_of_package i.package i.universe.id) deps
   in
+
+  let dep_odocs = setify dep_odocs in
 
   begin
     let key = info.package, info.universe.id in
@@ -373,13 +378,10 @@ let compile_fragment all_infos info =
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
 
   [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
-    Format.asprintf "\t/Users/jon/.opam/%s/bin/odoc compile --parent %s -I %a $< %s -o %a" ocaml_version parent_trio.mldname Fpath.pp (Fpath.split_base parent_trio.odoc |> fst) include_str Fpath.pp odoc_path;
-    Format.asprintf "compile : %a" Fpath.pp odoc_path;
-    Format.asprintf "Makefile.link : %a" Fpath.pp odoc_path ]
+    Format.asprintf "\topam exec --switch %s -- odoc compile --parent %s -I %a $< %s -o %a" ocaml_version parent_trio.mldname Fpath.pp (Fpath.split_base parent_trio.odoc |> fst) include_str Fpath.pp odoc_path;
+  ]
 
 
-let stamp_of_package pkg universe = 
-  Format.asprintf ".compile_%s_%a" universe Opam.pp_package pkg
 
 let compile_stamps all_infos =
   let cardinal = PH.length packages in
@@ -391,7 +393,7 @@ let compile_stamps all_infos =
     let infos = List.filter (fun i -> i.package=package && i.universe.id = universe_id) all_infos in
     let odoc_files = List.map (fun i -> odoc_file_of_info i |> Fpath.to_string) infos in
     ( Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files)) ::
-      "\ttouch $<" :: acc
+      "\ttouch $@" :: Printf.sprintf "compile: %s" stamp :: acc
   ) packages []
 
 (* Rule for generating Makefile.<package>.link *)
@@ -503,9 +505,14 @@ let run _whitelist _roots =
   Seq.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
   let compile_stamps = compile_stamps infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) compile_stamps;
+  close_out oc;
 
+  let oc = open_out "Makefile.link" in
   let links = link_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) links;
+  close_out oc;
+  
+  let oc = open_out "Makefile.mlds" in
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
   close_out oc;

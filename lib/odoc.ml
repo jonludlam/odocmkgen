@@ -51,7 +51,7 @@ let compile_deps version file =
       close_in ic;
       lines
     end else begin
-      let lines = lines_of_process (Format.asprintf "/Users/jon/.opam/%s/bin/odoc compile-deps %a" version Fpath.pp file) in
+      let lines = lines_of_process (Format.asprintf "opam exec --switch %s -- odoc compile-deps %a" version Fpath.pp file) in
       let tmp_file = Fpath.to_string (Fpath.add_ext "tmp" deps_file) in
       let oc = open_out tmp_file in
       List.iter (fun l -> Printf.fprintf oc "%s\n" l) lines;
