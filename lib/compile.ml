@@ -297,14 +297,21 @@ let get_deps all_infos info =
           [List.hd sorted]
         with _ -> []
 
-
-module PH = Hashtbl.Make(struct
+module PandU = struct
         type t = (Opam.package * Digest.t)
 
         let equal (p1,d1) (p2,d2) = Digest.equal d1 d2 && p1.Opam.name = p2.Opam.name && p1.version = p2.version
         let hash (p,d) = Hashtbl.hash (d, p.Opam.name, p.Opam.version)
-      end)
+        let compare (p1, d1) (p2, d2) =
+          match String.compare d1 d2 with
+          | (1 | -1) as x -> x
+          | _ -> match String.compare p1.Opam.name p2.Opam.name with
+                 | (1 | -1) as x -> x
+                 | _ -> String.compare p1.version p2.version 
+      end
 
+module PH = Hashtbl.Make(PandU)
+module PandUSet = Set.Make(PandU)
       module PH2 = Hashtbl.Make(struct
         type t = Opam.package
 
@@ -315,12 +322,15 @@ module PH = Hashtbl.Make(struct
 
 let stamp_of_package pkg universe = 
   Format.asprintf ".compile_%s_%a" universe Opam.pp_package pkg
-      
+
+let makefile_of_package pkg universe =
+  Format.asprintf "Makefile.%s_%a" universe Opam.pp_package pkg
+
 (* Map of package to deps *)
-let packages = PH.create 30000
+let package_deps = PH.create 30000
 let infos = PH2.create 30000
 
-(* let fragments = PH.create 30000 *)
+let fragments = PH.create 30000
 
 (* Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_fragment all_infos info =
@@ -345,13 +355,13 @@ let compile_fragment all_infos info =
 
   begin
     let key = info.package, info.universe.id in
-    let value = List.map (fun dep -> (dep.package, dep.universe.id)) deps |> setify in
+    let value = List.map (fun dep -> (dep.package, dep.universe.id)) deps |> PandUSet.of_list in
     begin
-      match PH.find packages key with
+      match PH.find package_deps key with
       | exception Not_found ->
-        PH.replace packages key value
+        PH.replace package_deps key value
       | xs ->
-        PH.replace packages key (setify (xs @ value))
+        PH.replace package_deps key (PandUSet.union xs value)
     end;
     begin
       match PH2.find infos info.package with
@@ -376,40 +386,53 @@ let compile_fragment all_infos info =
   (* Odoc requires the directories in which to find the odoc files of the dependencies *)
   let dep_dirs = Fpath.Set.of_list @@ List.map (fun i -> (version_page i).dir) deps in
   let include_str = String.concat " " (Fpath.Set.fold (fun dep_dir acc -> ("-I " ^ Fpath.to_string dep_dir) :: acc ) dep_dirs []) in
+  let home = Sys.getenv "HOME" in
+  let frag =
+    [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
+      Format.asprintf "\t%s/.opam/%s/bin/odoc compile --parent %s -I %a $< %s -o %a" home ocaml_version parent_trio.mldname Fpath.pp (Fpath.split_base parent_trio.odoc |> fst) include_str Fpath.pp odoc_path;
+    ]
+  in
+  let key = (info.package, info.universe.id) in
+  match PH.find fragments key with
+  | exception Not_found -> PH.replace fragments key frag
+  | xs -> PH.replace fragments key (frag @ xs)
 
-  [ Format.asprintf "%a : %a %s" Fpath.pp odoc_path Fpath.pp Fpath.(info.root // info.dir // info.fname) (String.concat " " dep_odocs);
-    Format.asprintf "\topam exec --switch %s -- odoc compile --parent %s -I %a $< %s -o %a" ocaml_version parent_trio.mldname Fpath.pp (Fpath.split_base parent_trio.odoc |> fst) include_str Fpath.pp odoc_path;
-  ]
 
 
 
-let compile_stamps all_infos =
-  let cardinal = PH.length packages in
+let compile_stamps () =
+  let cardinal = PH.length package_deps in
   let n = ref 0 in
-  PH.fold (fun (package, universe_id) _deps acc ->
+  PH.iter (fun (package, universe_id) _deps ->
     incr n;
     Format.eprintf "stamp: [%d/%d]\n%!" !n cardinal;
     let stamp = stamp_of_package package universe_id in
-    let infos = List.filter (fun i -> i.package=package && i.universe.id = universe_id) all_infos in
+    let infos = PH2.find infos package in
+    let infos = List.filter (fun i -> i.package=package && i.universe.id = universe_id) infos in
     let odoc_files = List.map (fun i -> odoc_file_of_info i |> Fpath.to_string) infos in
-    ( Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files)) ::
-      "\ttouch $@" :: Printf.sprintf "compile: %s" stamp :: acc
-  ) packages []
+    let frag = [
+      Printf.sprintf "%s : %s" stamp (String.concat " " odoc_files);
+      "\ttouch $@" ] in
+    let key = (package, universe_id) in
+    match PH.find fragments key with
+    | exception Not_found -> PH.replace fragments key frag
+    | xs -> PH.replace fragments key (frag @ xs)
+  ) package_deps
 
 (* Rule for generating Makefile.<package>.link *)
-let link_fragment all_infos =
-  let cardinal = PH.length packages in
+let link_fragment () =
+  let cardinal = PH.length package_deps in
   let n = ref 0 in
   PH.fold (fun (package, universe_id) deps acc ->
     incr n;
     Format.eprintf "link: [%d/%d]\n%!" !n cardinal;
-    let deps = setify ((package, universe_id) :: deps) in
+    let deps = PandUSet.add (package, universe_id) deps in
     let extra =
       begin
         let u = Universe.All.find_universe universe_id in
         let missing =
           Universe.S.fold (fun pkg acc->
-          if not (List.exists (fun (pkg',_) -> pkg = pkg') deps)
+          if not (PandUSet.exists (fun (pkg',_) -> pkg = pkg') deps)
           then begin
             match PH2.find infos pkg with
             | exception Not_found -> acc
@@ -444,12 +467,15 @@ let link_fragment all_infos =
         else []
       end
     in
-    let deps = deps @ extra in
-    let universes = StringSet.of_list (List.map (fun (_, id) -> id) deps) in
-    let infos = List.filter (fun i -> i.package = package && i.universe.id = universe_id && not (is_hidden i.fname)) all_infos in
-    let deps = List.filter (fun i ->
-      (StringSet.mem i.universe.id universes) &&
-      (List.exists (fun (p, u) -> i.package = p && u = i.universe.id) deps)) all_infos in
+
+    let deps = PandUSet.union deps (PandUSet.of_list extra) in
+    let infos' = PH2.find infos package in
+    let infos' = List.filter (fun i -> i.package = package && i.universe.id = universe_id && not (is_hidden i.fname)) infos' in
+    let deps = PandUSet.fold (fun (pkg, universe) acc ->
+        match PH2.find infos pkg with
+        | exception Not_found -> acc
+        | xs -> (List.filter (fun x -> x.universe.id = universe) xs) @ acc) deps [] in
+
     let dep_pkgs = setify @@ List.map (fun dep -> dep.package, dep.universe.id) deps in
     let dep_dirs = setify @@ List.map (fun dep -> let (dir, _) = Fpath.split_base (odoc_file_of_info dep) in Fpath.to_string dir) deps in
     let include_str = "-I " ^ (String.concat " -I " dep_dirs) in
@@ -460,10 +486,10 @@ let link_fragment all_infos =
         [ Format.asprintf "%a : %s" Fpath.pp odocl_file
           (String.concat " " (List.map (fun (p, id) -> stamp_of_package p id) dep_pkgs));
           Format.asprintf "\todoc link %a %s -o %a" Fpath.pp odoc_file include_str Fpath.pp odocl_file;
-          Format.asprintf "link : %a\n%!" Fpath.pp odocl_file]) infos
+          Format.asprintf "link : %a\n%!" Fpath.pp odocl_file]) infos'
       in (Format.asprintf "# XXXXXX Package: %a universe %s" Opam.pp_package package) universe_id :: (List.flatten result) @ acc
     
-    ) packages []
+    ) package_deps []
 
 let universe_path id =
   Fpath.(v "prep" / "universes" / id)
@@ -498,20 +524,27 @@ let run _whitelist _roots =
       | None -> Some [info]
       | Some xs -> Some (info :: xs)) map) StringMap.empty infos
   in
-  let infos_s = List.to_seq infos in
   total := List.length infos;
-  let lines = Seq.map (compile_fragment infos_map) infos_s in
+  let _ = List.iter (compile_fragment infos_map) infos in
+  let _ = compile_stamps () in
   let oc = open_out "Makefile.gen" in
-  Seq.iter (List.iter (fun line -> Printf.fprintf oc "%s\n" line)) lines;
-  let compile_stamps = compile_stamps infos in
-  List.iter (fun line -> Printf.fprintf oc "%s\n" line) compile_stamps;
+  PH.iter (fun (pkg,universe) frag ->
+    let poc = open_out (makefile_of_package pkg universe) in
+    List.iter (fun l -> Printf.fprintf poc "%s\n" l) frag;
+    close_out poc;
+    let pdeps = try PH.find package_deps (pkg,universe) with Not_found -> PandUSet.empty in
+    let pdeps = PandUSet.remove (pkg,universe) pdeps in
+    let pdeps = PandUSet.fold (fun (pkg, universe) acc -> stamp_of_package pkg universe :: acc) pdeps [] in
+    Printf.fprintf oc "%s : %s\n" (stamp_of_package pkg universe) (String.concat " " pdeps);
+    Printf.fprintf oc "\tmake -f %s %s\n" (makefile_of_package pkg universe) (stamp_of_package pkg universe);
+    Printf.fprintf oc "compile : %s\n" (stamp_of_package pkg universe)) fragments;
   close_out oc;
 
   let oc = open_out "Makefile.link" in
-  let links = link_fragment infos in
+  let links = link_fragment () in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) links;
   close_out oc;
-  
+
   let oc = open_out "Makefile.mlds" in
   let lines = parent_mld_fragment infos in
   List.iter (fun line -> Printf.fprintf oc "%s\n" line) lines;
