@@ -233,7 +233,7 @@ let mld_contents mld =
       (alpha_heading (name first)) :: inner packages
     in
     
-    [ "{0 Packages}" ] @ interpose_alphabet (List.sort (fun c1 c2 -> String.compare (name c1) (name c2)) children)
+    [ "{0 Packages}" ] @ interpose_alphabet (List.sort (fun c1 c2 -> String.compare (String.uppercase_ascii (name c1)) (String.uppercase_ascii (name c2))) children)
   | Package p -> [
     Printf.sprintf "{0 Package '%s'}" p;
     "{1 Versions}"
