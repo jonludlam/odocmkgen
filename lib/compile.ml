@@ -202,12 +202,12 @@ let universe_page info =
     (Some (universes_page ()))
     info.universe.id (Universe info.universe.id)
 
-let package_page info =
-  let name =
-    let n_str = Astring.String.cuts ~sep:"-" info.package.name in
-    String.concat "_" n_str
-  in
+let escape str =
+  let s = String.concat "_" (Astring.String.cuts ~sep:"-" str) in
+  String.concat "_" (Astring.String.cuts ~sep:"." s)
 
+let package_page info =
+  let name = escape info.package.name in
   let blessed = Universe.All.is_blessed info.package info.universe.id in
   if blessed then
     subdir_mld_odoc (Some (packages_page ())) name (Package info.package.name)
@@ -215,8 +215,7 @@ let package_page info =
     subdir_mld_odoc (Some (universe_page info)) name (Package info.package.name)
 
 let version_page info =
-  let v_str = Astring.String.cuts ~sep:"." info.package.version in
-  let v_str = String.concat "_" v_str in
+  let v_str = escape info.package.version in
   subdir_mld_odoc (Some (package_page info)) v_str Version
 
 let odoc_file_of_info info =
@@ -578,7 +577,6 @@ let compile_stamps () =
       | xs -> PH.replace fragments key (frag @ xs))
     package_deps
 
-(* Rule for generating Makefile.<package>.link *)
 let link_fragment () =
   let cardinal = PH.length package_deps in
   let n = ref 0 in
