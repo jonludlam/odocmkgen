@@ -221,7 +221,7 @@ let mld_contents mld =
         | a :: b :: rest ->
           let na = name a in
           let nb = name b in
-          if na.[0] <> nb.[0]
+          if Char.uppercase_ascii na.[0] <> Char.uppercase_ascii nb.[0]
           then Format.asprintf "%a" child_format a :: (alpha_heading nb) :: inner (b :: rest)
           else Format.asprintf "%a" child_format a :: (inner (b :: rest))
         | [a] ->
