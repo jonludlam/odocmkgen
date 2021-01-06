@@ -32,7 +32,7 @@ let gen_input ~packages ~package_deps inp =
   in
   concat
     [
-      rule output_file ~fdeps:[ input_file ] ~oo_deps:compile_pkg_deps
+      rule [ output_file ] ~fdeps:[ input_file ] ~oo_deps:compile_pkg_deps
         [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ];
       phony_rule "link" ~fdeps:[ output_file ] [];
     ]
@@ -89,7 +89,7 @@ let gen (inputs : Inputs.t list) =
         [
           acc;
           concat (List.map (gen_input ~packages ~package_deps) inputs);
-          rule pkg_makefile ~fdeps:output_files
+          rule [ pkg_makefile ] ~fdeps:output_files
             [ cmd "odocmkgen" $ "generate" $ "--package" $ package ];
           include_ pkg_makefile;
         ])

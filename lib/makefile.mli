@@ -8,7 +8,7 @@ type cmd
 val concat : t list -> t
 
 val rule :
-  Fpath.t ->
+  Fpath.t list ->
   ?fdeps:Fpath.t list ->
   ?deps:string list ->
   ?oo_deps:string list ->

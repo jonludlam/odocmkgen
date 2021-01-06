@@ -29,7 +29,7 @@ let compile_fragment all_infos info =
   let open Makefile in
   concat
     [
-      rule odoc_path
+      rule [ odoc_path ]
         ~fdeps:(Inputs.input_file info :: dep_odocs)
         [
           cmd "odoc" $ "compile" $ "--package" $ info.package $ "$<"
