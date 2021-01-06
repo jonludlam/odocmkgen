@@ -9,15 +9,14 @@ Use paths found by findlib:
   $TESTCASE_ROOT/_build/install/default/lib/test
 
   $ odocmkgen -- "$P" > Makefile
-
-  $ make
-  odocmkgen gen $TESTCASE_ROOT/_build/install/default/lib/test
   Warning, couldn't find dep CamlinternalFormatBasics of file $TESTCASE_ROOT/_build/install/default/lib/test/test.cmti
   Warning, couldn't find dep Stdlib of file $TESTCASE_ROOT/_build/install/default/lib/test/test.cmti
-  mkdir odocs
+
+  $ make
+  'mkdir' 'odocs'
   'odoc' 'compile' '--package' 'test' '$TESTCASE_ROOT/_build/install/default/lib/test/test.cmti' '-o' 'odocs/test/test.odoc'
   'odoc' 'compile' '--package' 'test' '$TESTCASE_ROOT/_build/install/default/doc/test/odoc-pages/test.mld' '-o' 'odocs/test/odoc-pages/page-test.odoc'
-  mkdir odocls
+  'mkdir' 'odocls'
   'odoc' 'link' 'odocs/test/odoc-pages/page-test.odoc' '-o' 'odocls/test/odoc-pages/page-test.odocl' '-I' 'odocs/test/' '-I' 'odocs/test/odoc-pages/'
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/' '-I' 'odocs/test/odoc-pages/'
 
