@@ -13,16 +13,15 @@ Prepare packages:
 Generate the Makefile:
 
   $ odocmkgen -- prep/* > Makefile
+  Warning, couldn't find dep CamlinternalFormatBasics of file prep/test/test.cmti
+  Warning, couldn't find dep Stdlib of file prep/test/test.cmti
 
 Build:
 
   $ make
-  odocmkgen gen prep/test
-  Warning, couldn't find dep CamlinternalFormatBasics of file prep/test/test.cmti
-  Warning, couldn't find dep Stdlib of file prep/test/test.cmti
-  mkdir odocs
+  'mkdir' 'odocs'
   'odoc' 'compile' '--package' 'test' 'prep/test/test.cmti' '-o' 'odocs/test/test.odoc'
-  mkdir odocls
+  'mkdir' 'odocls'
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
@@ -33,3 +32,12 @@ Doesn't resolve but should:
   odoc_print: PATH argument: no `odocls/test/page-test.odocl' file or directory
   Usage: odoc_print [OPTION]... PATH
   Try `odoc_print --help' for more information.
+
+Finally, render:
+
+  $ odocmkgen generate odocls > Makefile.gen
+  dir=test file=Test
+
+  $ make -f Makefile.gen html
+  'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/test/test.odocl'

@@ -29,63 +29,40 @@ let read_doc_dir () =
   let dir = read_lib_dir () in
   Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
 
-module Default = struct
-    let default whitelist dirs =
-      let pp_whitelist fmt = function
-        | [] -> ()
-        | wl -> Format.fprintf fmt " -w %s" (String.concat "," wl)
-      in
-      let pp_dirs fmt l =
-        List.iter (fun lib -> Format.fprintf fmt " %s" lib) l
-      in
-      Format.printf {|
-default: link
-.PHONY: compile link clean html latex man
-compile: odocs
-link: compile odocls
-Makefile.gen : Makefile
-	odocmkgen gen%a%a
-odocs:
-	mkdir odocs
-odocls:
-	mkdir odocls
-clean:
-	rm -rf odocs odocls Makefile.gen
-ifneq ($(MAKECMDGOALS),clean)
--include Makefile.gen
-endif
-|} pp_whitelist whitelist pp_dirs dirs
+module Gen = struct
+  let prelude =
+    let open Makefile in
+    concat
+      [
+        phony_rule "default" ~deps:[ "link" ] [];
+        phony_rule "compile" ~oo_deps:[ "odocs" ] [];
+        phony_rule "link" ~deps:[ "compile" ] ~oo_deps:[ "odocls" ] [];
+        phony_rule "clean" [ cmd "rm" $ "-r" $ "odocs" $ "odocls" ];
+        rule [ Fpath.v "odocs" ] [ cmd "mkdir" $ "odocs" ];
+        rule [ Fpath.v "odocls" ] [ cmd "mkdir" $ "odocls" ];
+      ]
+
+  let run whitelist roots =
+    let inputs = Inputs.find_inputs ~whitelist roots in
+    let makefile =
+      let open Makefile in
+      concat [ prelude; Compile.gen inputs; Link.gen inputs ]
+    in
+    Format.printf "%a\n" Makefile.pp makefile
 
   let whitelist =
-    Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
+    Arg.(value & opt (list string) [] & info [ "w"; "whitelist" ])
 
   let dirs =
     let doc =
-      "Path to libraries. They can be found by querying $(b,ocamlfind query -r my_package)."
+      "Path to libraries. They can be found by querying $(b,ocamlfind query -r \
+       my_package)."
     in
-    (* [some string] and not [some dir] because we don't need it to exist yet. *)
-    Arg.(value & pos_all string [] & info [] ~doc ~docv:"DIR")
-
-  let cmd =
-    Term.(const default $ whitelist $ dirs)
-
-  let info =
-    Term.info ~version:"%%VERSION%%" "odocmkgen"
-end
-
-module Gen = struct
-
-  let whitelist =
-    Arg.(value & opt (list string) [] & info ["w"; "whitelist"])
-
-  let dirs =
-    let doc = "Path to libraries." in
     Arg.(value & pos_all conv_fpath_dir [] & info [] ~doc ~docv:"DIR")
 
-  let cmd = Term.(const Gen.run $ whitelist $ dirs)
+  let cmd = Term.(const run $ whitelist $ dirs)
 
-  let info =
-    Term.info "gen" ~doc:"Produce a makefile for building the documentation."
+  let info = Term.info ~version:"%%VERSION%%" "odocmkgen"
 end
 
 module Generate = struct
@@ -145,5 +122,5 @@ let _ =
       OpamDeps.(cmd, info);
       PreparePackages.(cmd, info);
     ]
-  and default_cmd = Default.(cmd, info) in
+  and default_cmd = Gen.(cmd, info) in
   Term.exit (Term.eval_choice default_cmd cmds)
