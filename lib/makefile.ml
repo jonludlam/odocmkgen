@@ -1,5 +1,5 @@
 type rule = {
-  target : string;
+  targets : string list;
   deps : string list;
   oo_deps : string list;
   recipe : string list;
@@ -13,20 +13,20 @@ let cmd_to_string cmd = cmd []
 
 let concat ts = Concat ts
 
-let rule' target ?(fdeps = []) ?(deps = []) ?(oo_deps = []) recipe =
+let rule' targets ?(fdeps = []) ?(deps = []) ?(oo_deps = []) recipe =
   let deps = List.map Fpath.to_string fdeps @ deps in
   let recipe = List.map cmd_to_string recipe in
-  Rule { target; deps; oo_deps; recipe }
+  Rule { targets; deps; oo_deps; recipe }
 
-let rule target ?fdeps ?deps ?oo_deps recipe =
-  let target = Fpath.to_string target in
-  rule' target ?fdeps ?deps ?oo_deps recipe
+let rule targets ?fdeps ?deps ?oo_deps recipe =
+  let targets = List.map Fpath.to_string targets in
+  rule' targets ?fdeps ?deps ?oo_deps recipe
 
 let phony_rule target ?fdeps ?deps ?oo_deps recipe =
   Concat
     [
-      rule' target ?fdeps ?deps ?oo_deps recipe;
-      rule' ".PHONY" ~deps:[ target ] [];
+      rule' [ target ] ?fdeps ?deps ?oo_deps recipe;
+      rule' [ ".PHONY" ] ~deps:[ target ] [];
     ]
 
 let include_ p = Include (Fpath.to_string p)
@@ -42,8 +42,9 @@ let pp_rule fmt t =
     | deps -> fprintf fmt " | %a" pp_deps deps
   in
   let pp_recipe fmt = List.iter (fprintf fmt "\t%s@\n") in
-  fprintf fmt "%s : %a%a@\n%a" t.target pp_deps t.deps pp_oo_deps t.oo_deps
-    pp_recipe t.recipe
+  fprintf fmt "%s : %a%a@\n%a"
+    (String.concat " " t.targets)
+    pp_deps t.deps pp_oo_deps t.oo_deps pp_recipe t.recipe
 
 let pp_include fmt p = Format.fprintf fmt "-include %s@\n" p
 
