@@ -10,20 +10,20 @@ Prepare packages:
   Copy '$TESTCASE_ROOT/_build/install/default/lib/test/test.cmti' -> 'prep/test/test.cmti'
   Copy '$TESTCASE_ROOT/_build/install/default/doc/test/odoc-pages/test.mld' -> 'prep/test/test.mld'
 
-Build:
+Generate the Makefile:
 
   $ odocmkgen -- prep/* > Makefile
 
-  $ make html
+Build:
+
+  $ make
   odocmkgen gen prep/test
   Warning, couldn't find dep CamlinternalFormatBasics of file prep/test/test.cmti
   Warning, couldn't find dep Stdlib of file prep/test/test.cmti
+  mkdir odocs
   'odoc' 'compile' '--package' 'test' 'prep/test/test.cmti' '-o' 'odocs/test/test.odoc'
+  mkdir odocls
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/'
-  'odocmkgen' 'generate' '--package' 'test'
-  dir=test file=Test
-  odoc support-files --output-dir html
-  odoc html-generate odocls/test/test.odocl --output-dir html
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
