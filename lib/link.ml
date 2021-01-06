@@ -80,17 +80,7 @@ let gen (inputs : Inputs.t list) =
   StringMap.fold
     (fun package inputs acc ->
       let package_deps = package :: StringMap.find package package_deps in
-      let output_files = List.map Inputs.link_target inputs in
-      let pkg_makefile =
-        Fpath.v (Format.asprintf "Makefile.%s.generate" package)
-      in
       let open Makefile in
       concat
-        [
-          acc;
-          concat (List.map (gen_input ~packages ~package_deps) inputs);
-          rule [ pkg_makefile ] ~fdeps:output_files
-            [ cmd "odocmkgen" $ "generate" $ "--package" $ package ];
-          include_ pkg_makefile;
-        ])
+        [ acc; concat (List.map (gen_input ~packages ~package_deps) inputs) ])
     packages (Makefile.concat [])
