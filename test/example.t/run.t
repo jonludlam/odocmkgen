@@ -4,26 +4,55 @@ The driver works on compiled files:
 
   $ odocmkgen -- a b > Makefile
 
-  $ make html
+  $ make
   odocmkgen gen a b
   Warning, couldn't find dep CamlinternalFormatBasics of file a/a.cmi
   Warning, couldn't find dep Stdlib of file a/a.cmi
   Warning, couldn't find dep CamlinternalFormatBasics of file b/b.cmi
   Warning, couldn't find dep Stdlib of file b/b.cmi
-  'odoc' 'compile' '--package' 'b' 'b/b.cmi' '-o' 'odocs/b/b.odoc'
-  'odoc' 'link' 'odocs/b/b.odoc' '-o' 'odocls/b/b.odocl' '-I' 'odocs/b/'
-  'odocmkgen' 'generate' '--package' 'b'
-  dir=b file=B
+  mkdir odocs
   'odoc' 'compile' '--package' 'a' 'a/a.cmi' '-o' 'odocs/a/a.odoc'
+  'odoc' 'compile' '--package' 'b' 'b/b.cmi' '-o' 'odocs/b/b.odoc'
+  mkdir odocls
   'odoc' 'link' 'odocs/a/a.odoc' '-o' 'odocls/a/a.odocl' '-I' 'odocs/a/'
-  'odocmkgen' 'generate' '--package' 'a'
-  dir=a file=A
-  odoc support-files --output-dir html
-  odoc html-generate odocls/a/a.odocl --output-dir html
-  odoc html-generate odocls/b/b.odocl --output-dir html
+  'odoc' 'link' 'odocs/b/b.odoc' '-o' 'odocls/b/b.odocl' '-I' 'odocs/b/'
 
-  $ ls Makefile*
-  Makefile
-  Makefile.a.generate
-  Makefile.b.generate
-  Makefile.gen
+  $ odocmkgen generate odocls/* > Makefile.generate
+  dir=a file=A
+  dir=b file=B
+
+  $ make -f Makefile.generate html
+  'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/a/a.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/b/b.odocl'
+
+  $ make -f Makefile.generate latex
+  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/a/a.odocl'
+  dir=a file=A
+  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/b/b.odocl'
+  dir=b file=B
+
+  $ make -f Makefile.generate man
+  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/a/a.odocl'
+  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/b/b.odocl'
+
+  $ find html latex man | sort
+  html
+  html/a
+  html/a/A
+  html/a/A/index.html
+  html/b
+  html/b/B
+  html/b/B/index.html
+  html/highlight.pack.js
+  html/odoc.css
+  latex
+  latex/a
+  latex/a/A.tex
+  latex/b
+  latex/b/B.tex
+  man
+  man/a
+  man/a/A.3o
+  man/b
+  man/b/B.3o

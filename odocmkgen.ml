@@ -14,6 +14,21 @@ let conv_compose ?docv parse to_string c =
   and print fmt t = conv_printer c fmt (to_string t) in
   conv ~docv (parse, print)
 
+(** Like [Cmdliner.Arg.dir] but return a [Fpath.t] *)
+let conv_fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir
+
+(* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
+let read_lib_dir () =
+  match Util.Process_util.lines_of_process "ocamlfind printconf path" with
+  | [ base_dir ] -> base_dir
+  | _ ->
+      Format.eprintf "Failed to find ocaml lib path";
+      exit 1
+
+let read_doc_dir () =
+  let dir = read_lib_dir () in
+  Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
+
 module Default = struct
     let default whitelist dirs =
       let pp_whitelist fmt = function
@@ -24,22 +39,18 @@ module Default = struct
         List.iter (fun lib -> Format.fprintf fmt " %s" lib) l
       in
       Format.printf {|
-default: generate
-.PHONY: compile link generate clean html latex man
+default: link
+.PHONY: compile link clean html latex man
 compile: odocs
 link: compile odocls
 Makefile.gen : Makefile
 	odocmkgen gen%a%a
-generate: link
 odocs:
 	mkdir odocs
 odocls:
 	mkdir odocls
 clean:
-	rm -rf odocs odocls html latex man Makefile.*link Makefile.gen Makefile.*generate
-html: html/odoc.css
-html/odoc.css:
-	odoc support-files --output-dir html
+	rm -rf odocs odocls Makefile.gen
 ifneq ($(MAKECMDGOALS),clean)
 -include Makefile.gen
 endif
@@ -69,9 +80,7 @@ module Gen = struct
 
   let dirs =
     let doc = "Path to libraries." in
-    let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
-    (* [some string] and not [some dir] because we don't need it to exist yet. *)
-    Arg.(value & pos_all fpath_dir [] & info [] ~doc ~docv:"DIR")
+    Arg.(value & pos_all conv_fpath_dir [] & info [] ~doc ~docv:"DIR")
 
   let cmd = Term.(const Gen.run $ whitelist $ dirs)
 
@@ -80,18 +89,15 @@ module Gen = struct
 end
 
 module Generate = struct
-  let generate package =
-    Generate.run (Fpath.v "odocls") package
+  let paths =
+    let doc = "Paths to packages of .odocl files." in
+    Arg.(non_empty & pos_all conv_fpath_dir [] & info [] ~docv:"PACKAGES" ~doc)
 
-  let package =
-    let doc = "Select the package to examine" in
-    Arg.(required & opt (some string) None & info ["p"; "package"]
-            ~docv:"PKG" ~doc)
-    
-  let cmd = Term.(const generate $ package)
+  let cmd = Term.(const Generate.run $ paths)
 
-  let info = Term.info "generate" ~doc:"Produce a makefile for generating outputs from odoc files"
-  
+  let info =
+    Term.info "generate"
+      ~doc:"Produce a makefile for generating outputs from odoc files"
 end
 
 module OpamDeps = struct
