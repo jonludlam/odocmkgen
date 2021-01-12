@@ -66,7 +66,7 @@ let compile_package_page pkg inputs package_page =
     [
       rule index_compiled ~fdeps:[ index_mld ]
         [
-          cmd "odoc" $ "compile" $ "--package" $ pkg $$ childs_args $ "$<"
+          cmd "odoc" $ "compile" $$ childs_args $ "$<"
           $ "-o" $ "$@";
         ];
       index_mld_rule;

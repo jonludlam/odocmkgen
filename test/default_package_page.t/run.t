@@ -10,13 +10,13 @@ Automatic generation of the package index page.
   Warning, couldn't find dep CamlinternalFormatBasics of file $TESTCASE_ROOT/_build/install/default/lib/test/test.cmt
   'mkdir' '-p' 'odocs/test'
   'odocmkgen' 'package-index' 'test' 'test' >'odocs/test/test.mld'
-  'odoc' 'compile' '--package' 'test' '-c' 'test' 'odocs/test/test.mld' '-o' 'odocs/test/page-test.odoc'
+  'odoc' 'compile' '-c' 'test' 'odocs/test/test.mld' '-o' 'odocs/test/page-test.odoc'
   'odoc' 'compile' '--parent' 'page-test' '$TESTCASE_ROOT/_build/install/default/lib/test/test.cmt' '-I' 'odocs/test/' '-o' 'odocs/test/test.odoc'
   'odoc' 'link' 'odocs/test/page-test.odoc' '-o' 'odocls/test/page-test.odocl' '-I' 'odocs/test/'
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/'
   'odocmkgen' 'generate' '--package' 'test'
-  dir=test/test file=
-  dir=test/test file=Test
+  dir=test file=
+  dir=test file=Test
   odoc support-files --output-dir html
   odoc html-generate odocls/test/page-test.odocl --output-dir html
   odoc html-generate odocls/test/test.odocl --output-dir html
@@ -28,7 +28,7 @@ Automatic generation of the package index page.
 
   $ odoc_print odocls/test/page-test.odocl
   {
-    "name": { "`Page": [ { "`RootPage": "test" }, "test" ] },
+    "name": { "`RootPage": "test" },
     "root": "<root>",
     "content": [
       [
@@ -36,12 +36,7 @@ Automatic generation of the package index page.
         {
           "`Heading": [
             "`Title",
-            {
-              "`Label": [
-                { "`Page": [ { "`RootPage": "test" }, "test" ] },
-                "test"
-              ]
-            },
+            { "`Label": [ { "`RootPage": "test" }, "test" ] },
             [ [ "odocs/test/test.mld 0:3 0:7", { "`Word": "test" } ] ]
           ]
         }
@@ -64,15 +59,7 @@ Automatic generation of the package index page.
                             {
                               "`Resolved": {
                                 "`Identifier": {
-                                  "`Root": [
-                                    {
-                                      "`Page": [
-                                        { "`RootPage": "test" },
-                                        "test"
-                                      ]
-                                    },
-                                    "Test"
-                                  ]
+                                  "`Root": [ { "`RootPage": "test" }, "Test" ]
                                 }
                               }
                             },
