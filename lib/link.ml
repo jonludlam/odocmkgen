@@ -66,6 +66,10 @@ let package_page ~packages ~package_deps package =
   and index_odocl = Inputs.index_page_odocl package in
   gen_link ~packages ~package_deps index_odoc index_odocl
 
+let remove_package_page pkg inputs =
+  let page_name = "page-" ^ pkg in
+  List.filter (fun inp -> inp.Inputs.name <> page_name) inputs
+
 (* Ideally we would have a list of packages on which the specified package depends.
    Here we're making an assumption - that the references in the doc comments will
    only be referring to packages that are required to compile the modules. Other
@@ -84,6 +88,7 @@ let gen packages =
   StringMap.fold
     (fun package inputs acc ->
       (* Don't link hidden modules *)
+      let inputs = remove_package_page package inputs in
       let inputs =
         inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
       in
