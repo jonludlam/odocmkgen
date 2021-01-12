@@ -25,7 +25,6 @@ Automatic generation of the package index page.
   {0 test}
   
   - {!module-test}
-  - {!module-test}
 
   $ odoc_print odocls/test/page-test.odocl
   {
@@ -48,7 +47,7 @@ Automatic generation of the package index page.
         }
       ],
       [
-        "odocs/test/test.mld 2:0 3:16",
+        "odocs/test/test.mld 2:0 2:16",
         {
           "`List": [
             "`Unordered",
@@ -60,38 +59,6 @@ Automatic generation of the package index page.
                     "`Paragraph": [
                       [
                         "odocs/test/test.mld 2:2 2:16",
-                        {
-                          "`Reference": [
-                            {
-                              "`Resolved": {
-                                "`Identifier": {
-                                  "`Root": [
-                                    {
-                                      "`Page": [
-                                        { "`RootPage": "test" },
-                                        "test"
-                                      ]
-                                    },
-                                    "Test"
-                                  ]
-                                }
-                              }
-                            },
-                            []
-                          ]
-                        }
-                      ]
-                    ]
-                  }
-                ]
-              ],
-              [
-                [
-                  "odocs/test/test.mld 3:2 3:16",
-                  {
-                    "`Paragraph": [
-                      [
-                        "odocs/test/test.mld 3:2 3:16",
                         {
                           "`Reference": [
                             {

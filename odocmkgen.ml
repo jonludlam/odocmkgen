@@ -117,7 +117,6 @@ module PackageIndex = struct
     plen <= slen && prefix = String.sub str 0 plen
 
   let gen pkg childs =
-    ignore childs;
     Format.printf "{0 %s}@\n@\n" pkg;
     List.iter
       (fun c ->
@@ -131,7 +130,7 @@ module PackageIndex = struct
 
   let childs =
     let doc = "Child modules/pages." in
-    Arg.(value & pos_all string [] & info [] ~doc ~docv:"CHILD")
+    Arg.(value & pos_right 0 string [] & info [] ~doc ~docv:"CHILD")
 
   let cmd = Term.(const gen $ pkg $ childs)
 
