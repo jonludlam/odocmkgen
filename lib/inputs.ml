@@ -1,25 +1,14 @@
 open Listm
 open Util
 
-let dir_contents dir =
-  Sys.readdir (Fpath.to_string dir)
-  |> Array.map (Fpath.( / ) dir)
-  |> Array.to_list
-
 let filter pred item = if pred item then [item] else []
-
-let is_dir x = Sys.is_directory (Fpath.to_string x)
-
-let dir_exists x =
-  let p = Fpath.to_string x in
-  Sys.file_exists p && Sys.is_directory p
 
 let has_ext exts f =
   List.exists (fun suffix -> Fpath.has_ext suffix f) exts
 
 let rec find_files base_dir =
-  let items = dir_contents base_dir in
-  let dirs, files = List.partition is_dir items in
+  let items = Fs_util.dir_contents base_dir in
+  let dirs, files = List.partition Fs_util.is_dir items in
   let subitems = dirs >>= find_files in
   files @ subitems
 
@@ -131,7 +120,7 @@ let find_inputs ~whitelist roots =
   let visited_doc_dirs = ref Fpath.Set.empty in
   let infos =
     roots >>= fun root ->
-    let files = dir_contents root in
+    let files = Fs_util.dir_contents root in
     let package, prefix =
       match package_of_path root with
       | Some x -> x
@@ -143,7 +132,9 @@ let find_inputs ~whitelist roots =
     let doc_inputs =
       (* This directory may not exist *)
       let doc_dir = Fpath.(prefix / "doc" / package) in
-      if (not (Fpath.Set.mem doc_dir !visited_doc_dirs)) && dir_exists doc_dir
+      if
+        (not (Fpath.Set.mem doc_dir !visited_doc_dirs))
+        && Fs_util.dir_exists doc_dir
       then (
         visited_doc_dirs := Fpath.Set.add doc_dir !visited_doc_dirs;
         (* [doc_dir] also contains [README.md], [CHANGES.md] and other common
