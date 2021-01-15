@@ -14,6 +14,8 @@ let conv_compose ?docv parse to_string c =
   and print fmt t = conv_printer c fmt (to_string t) in
   conv ~docv (parse, print)
 
+let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir
+
 module Default = struct
     let default whitelist dirs =
       let pp_whitelist fmt = function
@@ -69,8 +71,6 @@ module Gen = struct
 
   let dirs =
     let doc = "Path to libraries." in
-    let fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir in
-    (* [some string] and not [some dir] because we don't need it to exist yet. *)
     Arg.(value & pos_all fpath_dir [] & info [] ~doc ~docv:"DIR")
 
   let cmd = Term.(const Gen.run $ whitelist $ dirs)
@@ -111,9 +111,33 @@ module OpamDeps = struct
 
 end
 
+module PreparePackages = struct
+  let packages =
+    let doc = "The list of findlib packages to use." in
+    Arg.(non_empty & pos_all string [] & info [] ~doc ~docv:"PACKAGES")
+
+  let out =
+    let doc = "Output directory." in
+    (* Type [string], directory created if needed. *)
+    Arg.(required & opt (some string) None & info [ "o" ] ~doc)
+
+  let cmd = Term.(const Prepare_packages.run $ out $ packages)
+
+  let info =
+    let doc =
+      "Lookup a list of packages and prepare a directory tree that can be \
+       passed to $(b,gen)."
+    in
+    Term.info "prepare-packages" ~doc
+end
+
 let _ =
-  match Term.eval_choice ~err:Format.err_formatter Default.(cmd,info) [Gen.(cmd, info); Generate.(cmd, info); OpamDeps.(cmd, info)] with
-  | `Error _ ->
-    Format.pp_print_flush Format.err_formatter ();
-    exit 2
-  | _ -> ()
+  let cmds =
+    [
+      Gen.(cmd, info);
+      Generate.(cmd, info);
+      OpamDeps.(cmd, info);
+      PreparePackages.(cmd, info);
+    ]
+  and default_cmd = Default.(cmd, info) in
+  Term.exit (Term.eval_choice default_cmd cmds)
