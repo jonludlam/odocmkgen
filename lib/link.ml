@@ -11,10 +11,10 @@ let is_hidden s =
       else aux (i + 1)
   in aux 0
 
-let gen_input ~packages ~package_deps inp =
+let gen_input ~packages ~package_deps (inp, _) =
   let deps_dirs =
     (* Parent directories of every inputs from every [package_deps]. *)
-    let fold_inputs acc inp =
+    let fold_inputs acc (inp, _) =
       Fpath.Set.add (Fpath.parent (Inputs.compile_target inp)) acc
     in
     let fold_pkgs acc pkg =
@@ -39,14 +39,11 @@ let gen_input ~packages ~package_deps inp =
 
 (** Until we have a better way of resolving packages. Find package dependencies
     by following compile deps. Then transitive dependencies are flattened. *)
-let package_deps ~inputs_map ~packages =
-  let packages_of_input acc inp =
-    let f acc dep =
-      match StringMap.find_opt dep.Odoc.c_unit_name inputs_map with
-      | Some inp -> StringSet.add inp.Inputs.package acc
-      | None -> acc
-    in
-    List.fold_left f acc inp.Inputs.deps
+let package_deps ~packages =
+  let packages_of_input acc (_, deps) =
+    List.fold_left
+      (fun acc dep -> StringSet.add dep.Inputs.package acc)
+      acc deps
   in
   let packages_of_inputs inputs =
     List.fold_left packages_of_input StringSet.empty inputs
@@ -62,21 +59,14 @@ let package_deps ~inputs_map ~packages =
    Here we're making an assumption - that the references in the doc comments will
    only be referring to packages that are required to compile the modules. Other
    drivers may be able to supply additional packages in which to find referenced
-   elements.
-
-   We assume that link dependencies are the same as the corresponding compile
-   dependencies. *)
-let gen (inputs : Inputs.t list) =
-  let inputs_map =
-    StringMap.of_seq
-      (Seq.map (fun inp -> (inp.Inputs.name, inp)) (List.to_seq inputs))
-  in
+   elements. *)
+let gen inputs =
   (* Don't link hidden modules *)
   let link_inputs =
-    inputs >>= filter (fun inp -> not (is_hidden inp.Inputs.name))
+    inputs >>= filter (fun (inp, _) -> not (is_hidden inp.Inputs.name))
   in
   let packages = Inputs.split_packages link_inputs in
-  let package_deps = package_deps ~inputs_map ~packages in
+  let package_deps = package_deps ~packages in
   StringMap.fold
     (fun package inputs acc ->
       let package_deps = package :: StringMap.find package package_deps in

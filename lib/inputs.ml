@@ -118,5 +118,27 @@ let find_inputs root =
 let split_packages inputs =
   let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
   List.fold_left
-    (fun acc inp -> StringMap.update inp.package (f inp) acc)
+    (fun acc (({ package; _ }, _) as inp) ->
+      StringMap.update package (f inp) acc)
     StringMap.empty inputs
+
+module DigestMap = Map.Make (Digest)
+
+(** Compute direct compile-dependencies for a list of inputs.
+    Returns the list of inputs paired with its dependencies. *)
+let compile_deps inputs =
+  let inputs_by_digest =
+    List.fold_left
+      (fun acc inp -> DigestMap.add inp.digest inp acc)
+      DigestMap.empty inputs
+  in
+  let find_dep inp dep =
+    match DigestMap.find_opt dep.Odoc.c_digest inputs_by_digest with
+    | Some _ as x -> x
+    | None ->
+        Format.eprintf "Warning, couldn't find dep %s of file %a\n"
+          dep.Odoc.c_unit_name Fpath.pp inp.inppath;
+        None
+  in
+  let find_deps inp = List.filter_map (find_dep inp) inp.deps in
+  List.map (fun inp -> (inp, find_deps inp)) inputs
