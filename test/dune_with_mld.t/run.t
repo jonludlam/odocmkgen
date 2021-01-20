@@ -61,10 +61,17 @@ Generate the Makefile:
   
   .PHONY : compile-packages-test
   
-  compile : compile-packages compile-prep compile-test
+  compile : compile-packages-page-test.mld compile-packages-test-test.cmti compile-page-packages.mld
   
   .PHONY : compile
   
+  
+  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-packages-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/test/'
+  
+  link : odocls/packages/test/test.odocl
+  
+  .PHONY : link
   
   odocls/packages/page-test.odocl : odocs/packages/page-test.odoc | compile-packages
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
@@ -73,17 +80,10 @@ Generate the Makefile:
   
   .PHONY : link
   
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-prep
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
   
   link : odocls/./page-packages.odocl
-  
-  .PHONY : link
-  
-  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-test
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/test/'
-  
-  link : odocls/packages/test/test.odocl
   
   .PHONY : link
   
@@ -92,7 +92,7 @@ Build:
 
   $ make
   'mkdir' 'odocs'
-  make: *** No rule to make target 'compile-prep', needed by 'compile'.  Stop.
+  make: *** No rule to make target 'compile-packages-page-test.mld', needed by 'compile'.  Stop.
   [2]
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }

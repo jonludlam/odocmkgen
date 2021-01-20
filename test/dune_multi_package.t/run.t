@@ -70,40 +70,36 @@ The driver works on compiled files:
   
   .PHONY : compile-packages-b
   
-  compile : compile-a compile-b compile-packages compile-prep
+  compile : compile-packages-a-a.cmti compile-packages-b-b.cmti compile-packages-page-a.mld compile-packages-page-b.mld compile-page-packages.mld
   
   .PHONY : compile
   
   
-  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-a compile-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
-  
-  link : odocls/packages/a/a.odocl
-  
-  .PHONY : link
-  
-  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile-b
+  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile-packages-b
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/b/'
   
   link : odocls/packages/b/b.odocl
   
   .PHONY : link
   
-  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile-packages
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
+  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
   
-  link : odocls/packages/page-b.odocl
+  link : odocls/packages/a/a.odocl
   
   .PHONY : link
+  
+  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile-packages
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
   
   odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile-packages
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
   
-  link : odocls/packages/page-a.odocl
+  link : odocls/packages/page-b.odocl odocls/packages/page-a.odocl
   
   .PHONY : link
   
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-prep
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
   
   link : odocls/./page-packages.odocl
@@ -113,7 +109,7 @@ The driver works on compiled files:
 
   $ make
   'mkdir' 'odocs'
-  make: *** No rule to make target 'compile-a', needed by 'compile'.  Stop.
+  make: *** No rule to make target 'compile-packages-a-a.cmti', needed by 'compile'.  Stop.
   [2]
 
   $ odocmkgen generate odocls > Makefile.generate

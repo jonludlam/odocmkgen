@@ -1,5 +1,3 @@
-open Util
-
 (** Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_input ~parent_childs ~parent target (input, deps) =
   let parent_args, parent_inp =
@@ -74,10 +72,13 @@ let fold_tree f acc tree =
   in
   loop_node [] acc tree
 
+let compile_rule_of_path p =
+  "compile-" ^ String.concat "-" (Inputs.segs_of_path p)
+
 let gen inputs =
-  let packages = Inputs.split_packages inputs in
   let package_rules_s =
-    List.map (fun (pkg, _) -> "compile-" ^ pkg) (StringMap.bindings packages)
+    List.map (fun (info, _) -> compile_rule_of_path info.Inputs.reloutpath) inputs
+    |> List.sort_uniq String.compare
   in
   let tree = Inputs.make_tree inputs in
   let parent_childs = find_parent_childs tree in

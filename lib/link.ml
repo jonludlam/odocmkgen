@@ -1,8 +1,5 @@
 (** Generate linking rules *)
 
-open Listm
-open Util
-
 let is_hidden s =
   let len = String.length s in
   let rec aux i =
@@ -12,49 +9,70 @@ let is_hidden s =
   in
   aux 0
 
-let gen_input ~packages ~package_deps (inp, _) =
-  let deps_dirs =
-    (* Parent directories of every inputs from every [package_deps]. *)
-    let fold_inputs acc (inp, _) =
-      Fpath.Set.add (Fpath.parent (Inputs.compile_target inp)) acc
-    in
-    let fold_pkgs acc pkg =
-      List.fold_left fold_inputs acc (StringMap.find pkg packages)
-    in
-    List.fold_left fold_pkgs Fpath.Set.empty package_deps |> Fpath.Set.elements
-  in
-  (* Phony targets of dependencies (see {!Compile}). *)
-  let compile_pkg_deps = List.map (( ^ ) "compile-") package_deps in
-  let input_file = Inputs.compile_target inp
-  and output_file = Inputs.link_target inp in
-  let open Makefile in
+let link_inputs inputs deps_p =
+  let compile_rules = List.map Compile.compile_rule_of_path deps_p in
   let inc_args =
-    List.concat_map (fun dir -> [ "-I"; Fpath.to_string dir ]) deps_dirs
+    List.concat_map
+      (fun dir ->
+        [ "-I"; Fpath.to_string (Inputs.compile_path_of_relpath dir) ])
+      deps_p
+  in
+  let link_targets = List.map Inputs.link_target inputs in
+  let open Makefile in
+  let link_input input output_file =
+    let input_file = Inputs.compile_target input in
+    rule [ output_file ] ~fdeps:[ input_file ] ~oo_deps:compile_rules
+      [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ]
   in
   concat
     [
-      rule [ output_file ] ~fdeps:[ input_file ] ~oo_deps:compile_pkg_deps
-        [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ];
-      phony_rule "link" ~fdeps:[ output_file ] [];
+      concat (List.map2 link_input inputs link_targets);
+      phony_rule "link" ~fdeps:link_targets [];
     ]
 
-(** Until we have a better way of resolving packages. Find package dependencies
-    by following compile deps. Then transitive dependencies are flattened. *)
-let package_deps ~packages =
-  let packages_of_input acc (_, deps) =
-    List.fold_left
-      (fun acc dep -> StringSet.add dep.Inputs.package acc)
-      acc deps
+(** Compute link-dependencies by following compile-deps. The set of
+    dependencies is extended to entire directories, transitive dependencies are
+    flattened. Every paths correspond to the [reloutpath] field. *)
+let link_deps inputs =
+  let module S = Fpath.Set in
+  let module M = Fpath.Map in
+  let key inp = Fpath.parent inp.Inputs.reloutpath in
+  let path_map =
+    (* inputs grouped by [key] *)
+    let multi_add k v map =
+      M.update k (fun vs -> Some (v :: Option.value vs ~default:[])) map
+    in
+    let group_inputs acc ((inp, _) as inp') = multi_add (key inp) inp' acc in
+    List.fold_left group_inputs M.empty inputs
   in
-  let packages_of_inputs inputs =
-    List.fold_left packages_of_input StringSet.empty inputs
+  let direct_map =
+    (* direct dependencies *)
+    let acc_deps_p acc dep = S.add (key dep) acc in
+    let acc_deps acc (_, deps) = List.fold_left acc_deps_p acc deps in
+    M.map (List.fold_left acc_deps S.empty) path_map
   in
-  let packages_deps = StringMap.map packages_of_inputs packages in
-  StringMap.map
-    (fun deps ->
-      let f dep acc = StringSet.union acc (StringMap.find dep packages_deps) in
-      StringSet.fold f StringSet.empty deps |> StringSet.elements)
-    packages_deps
+  let rec transitive acc_map of_path =
+    match M.find of_path acc_map with
+    | Some deps_p -> (* Already visited *) (acc_map, deps_p)
+    | None ->
+        (* Insert a dummy value, in case of cycles, this function will return *)
+        let acc_map = M.add of_path S.empty acc_map in
+        let acc_map, deps_p =
+          let direct_deps = M.get of_path direct_map |> S.add of_path in
+          S.fold
+            (fun path (acc_map, acc_deps) ->
+              let acc_map, deps_p = transitive acc_map path in
+              (acc_map, S.union deps_p acc_deps))
+            direct_deps (acc_map, direct_deps)
+        in
+        (M.add of_path deps_p acc_map, deps_p)
+  in
+  M.fold
+    (fun path inputs (acc_map, acc_inp) ->
+      let acc_map, deps_p = transitive acc_map path in
+      (acc_map, (List.map fst inputs, S.elements deps_p) :: acc_inp))
+    path_map (M.empty, [])
+  |> snd
 
 (* Ideally we would have a list of packages on which the specified package depends.
    Here we're making an assumption - that the references in the doc comments will
@@ -62,16 +80,11 @@ let package_deps ~packages =
    drivers may be able to supply additional packages in which to find referenced
    elements. *)
 let gen inputs =
+  inputs
   (* Don't link hidden modules *)
-  let link_inputs =
-    inputs >>= filter (fun (inp, _) -> not (is_hidden inp.Inputs.name))
-  in
-  let packages = Inputs.split_packages link_inputs in
-  let package_deps = package_deps ~packages in
-  StringMap.fold
-    (fun package inputs acc ->
-      let package_deps = package :: StringMap.find package package_deps in
-      let open Makefile in
-      concat
-        [ acc; concat (List.map (gen_input ~packages ~package_deps) inputs) ])
-    packages (Makefile.concat [])
+  |> List.filter (fun (inp, _) -> not (is_hidden inp.Inputs.name))
+  |> link_deps
+  |> List.fold_left
+       (fun acc (inputs, deps_p) ->
+         Makefile.concat [ acc; link_inputs inputs deps_p ])
+       (Makefile.concat [])

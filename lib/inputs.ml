@@ -49,13 +49,18 @@ let pp fmt x =
 
 let input_file t = t.inppath
 
+let compile_path_of_relpath = Fpath.(( // ) (v "odocs"))
+
+let link_path_of_relpath = Fpath.(( // ) (v "odocls"))
+
 (** Returns the relative path to an odoc file based on an input file. For example, given
    `/home/opam/.opam/4.10.0/lib/ocaml/compiler-libs/lambda.cmi` it will return
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
-let compile_target t = Fpath.(v "odocs" // set_ext "odoc" t.reloutpath)
+let compile_target t =
+  compile_path_of_relpath (Fpath.set_ext "odoc" t.reloutpath)
 
 (** Like [compile_target] but goes into the "odocls" directory. *)
-let link_target t = Fpath.(v "odocls" // set_ext "odocl" t.reloutpath)
+let link_target t = link_path_of_relpath (Fpath.set_ext "odocl" t.reloutpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_cm_info root inppath =
