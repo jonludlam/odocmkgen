@@ -1,11 +1,6 @@
 open Listm
 open Util
 
-let filter pred item = if pred item then [item] else []
-
-let has_ext exts f =
-  List.exists (fun suffix -> Fpath.has_ext suffix f) exts
-
 (** Lower is better *)
 let cm_file_preference = function
   | ".cmti" -> Some 1
@@ -87,19 +82,6 @@ let get_mld_info root inppath =
   let name = Fpath.to_string (Fpath.rem_ext outfname) in
   let reloutpath = Fpath.append fparent outfname in
   { name; inppath; root; reloutpath; package }
-
-(** Expect paths like [prefix/lib/package] or [prefix/lib/package/sub_dir].
-    These paths are used in Opam and in Dune's _build/install.
-    In case the [lib] part cannot be found in the last two parents, returns
-    [None]. Also return the [prefix] part, that can be used to look for
-    [prefix/doc] for example. *)
-let package_of_path path =
-  let parent = Fpath.parent path in
-  let grand_parent = Fpath.parent parent in
-  if Fpath.basename parent = "lib" then Some (Fpath.basename path, grand_parent)
-  else if Fpath.basename grand_parent = "lib" then
-    Some (Fpath.basename parent, Fpath.parent grand_parent)
-  else None
 
 let split_packages inputs =
   let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
