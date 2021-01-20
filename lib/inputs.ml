@@ -6,12 +6,6 @@ let filter pred item = if pred item then [item] else []
 let has_ext exts f =
   List.exists (fun suffix -> Fpath.has_ext suffix f) exts
 
-let rec find_files base_dir =
-  let items = Fs_util.dir_contents base_dir in
-  let dirs, files = List.partition Fs_util.is_dir items in
-  let subitems = dirs >>= find_files in
-  files @ subitems
-
 (** Lower is better *)
 let cm_file_preference = function
   | ".cmti" -> Some 1
@@ -65,14 +59,15 @@ let input_file t = t.inppath
 (** Returns the relative path to an odoc file based on an input file. For example, given
    `/home/opam/.opam/4.10.0/lib/ocaml/compiler-libs/lambda.cmi` it will return
    `odocs/ocaml/compiler-libs/lambda.odoc` *)
-let compile_target t = Fpath.(v "odocs" / t.package // set_ext "odoc" t.reloutpath)
+let compile_target t = Fpath.(v "odocs" // set_ext "odoc" t.reloutpath)
 
 (** Like [compile_target] but goes into the "odocls" directory. *)
-let link_target t = Fpath.(v "odocls" / t.package // set_ext "odocl" t.reloutpath)
+let link_target t = Fpath.(v "odocls" // set_ext "odocl" t.reloutpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
-let get_cm_info ~package root inppath =
+let get_cm_info root inppath =
   let deps = Odoc.compile_deps inppath in
+  let package = Fpath.(basename (parent inppath)) in
   let reloutpath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
@@ -88,7 +83,8 @@ let get_cm_info ~package root inppath =
       Format.eprintf "Failed to find digest for self (%s)\n%!" name;
       []
 
-let get_mld_info ~package root inppath =
+let get_mld_info root inppath =
+  let package = Fpath.(basename (parent inppath)) in
   let relpath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
@@ -114,39 +110,10 @@ let package_of_path path =
     Some (Fpath.basename parent, Fpath.parent grand_parent)
   else None
 
-let find_inputs ~whitelist roots =
-  let roots = List.sort_uniq Fpath.compare roots in
-  (* Several paths can be part of the same package, avoid dupplicated doc_dir. *)
-  let visited_doc_dirs = ref Fpath.Set.empty in
-  let infos =
-    roots >>= fun root ->
-    let files = Fs_util.dir_contents root in
-    let package, prefix =
-      match package_of_path root with
-      | Some x -> x
-      | None ->
-          (* In case [root] is not recognized as a package, use the basename
-             instead. This may be wrong sometimes. *)
-          (Fpath.basename root, Fpath.parent root)
-    in
-    let doc_inputs =
-      (* This directory may not exist *)
-      let doc_dir = Fpath.(prefix / "doc" / package) in
-      if
-        (not (Fpath.Set.mem doc_dir !visited_doc_dirs))
-        && Fs_util.dir_exists doc_dir
-      then (
-        visited_doc_dirs := Fpath.Set.add doc_dir !visited_doc_dirs;
-        (* [doc_dir] also contains [README.md], [CHANGES.md] and other common
-           files installed by Dune, which we ignore here. *)
-        get_mld_files (find_files doc_dir) >>= get_mld_info ~package doc_dir )
-      else []
-    in
-    (get_cm_files files >>= get_cm_info ~package root) @ doc_inputs
-  in
-  if List.length whitelist > 0 then
-    List.filter (fun info -> List.mem info.package whitelist) infos
-  else infos
+let find_inputs root =
+  let files = Fs_util.dir_contents_rec root in
+  (get_cm_files files >>= get_cm_info root)
+  @ (get_mld_files files >>= get_mld_info root)
 
 let split_packages inputs =
   let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in

@@ -12,7 +12,7 @@ Prepare packages:
 
 Generate the Makefile:
 
-  $ odocmkgen -- prep/* > Makefile
+  $ odocmkgen gen prep > Makefile
   Warning, couldn't find dep CamlinternalFormatBasics of file prep/test/test.cmti
   Warning, couldn't find dep Stdlib of file prep/test/test.cmti
 
@@ -21,7 +21,9 @@ Build:
   $ make
   'mkdir' 'odocs'
   'odoc' 'compile' '--package' 'test' 'prep/test/test.cmti' '-o' 'odocs/test/test.odoc'
+  'odoc' 'compile' '--package' 'test' 'prep/test/test.mld' '-o' 'odocs/test/page-test.odoc'
   'mkdir' 'odocls'
+  'odoc' 'link' 'odocs/test/page-test.odoc' '-o' 'odocls/test/page-test.odocl' '-I' 'odocs/test/'
   'odoc' 'link' 'odocs/test/test.odoc' '-o' 'odocls/test/test.odocl' '-I' 'odocs/test/'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
@@ -29,15 +31,15 @@ Build:
 Doesn't resolve but should:
 
   $ odoc_print odocls/test/page-test.odocl | jq_scan_references
-  odoc_print: PATH argument: no `odocls/test/page-test.odocl' file or directory
-  Usage: odoc_print [OPTION]... PATH
-  Try `odoc_print --help' for more information.
+  {"`Resolved":{"`Value":[{"`Identifier":{"`Root":[{"`RootPage":"test"},"Test"]}},"x"]}}
 
 Finally, render:
 
   $ odocmkgen generate odocls > Makefile.gen
+  dir=test file=test
   dir=test file=Test
 
   $ make -f Makefile.gen html
   'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/test/page-test.odocl'
   'odoc' 'html-generate' '--output-dir' 'html' 'odocls/test/test.odocl'
