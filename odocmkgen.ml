@@ -30,26 +30,6 @@ let read_doc_dir () =
   Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
 
 module Gen = struct
-  let prelude =
-    let open Makefile in
-    concat
-      [
-        phony_rule "default" ~deps:[ "link" ] [];
-        phony_rule "compile" ~oo_deps:[ "odocs" ] [];
-        phony_rule "link" ~deps:[ "compile" ] ~oo_deps:[ "odocls" ] [];
-        phony_rule "clean" [ cmd "rm" $ "-r" $ "odocs" $ "odocls" ];
-        rule [ Fpath.v "odocs" ] [ cmd "mkdir" $ "odocs" ];
-        rule [ Fpath.v "odocls" ] [ cmd "mkdir" $ "odocls" ];
-      ]
-
-  let run dir =
-    let inputs = Inputs.find_inputs dir in
-    let makefile =
-      let open Makefile in
-      concat [ prelude; Compile.gen inputs; Link.gen inputs ]
-    in
-    Format.printf "%a\n" Makefile.pp makefile
-
   let dir =
     let doc =
       "Input directory tree. This tree can be prepared with the \
@@ -57,7 +37,7 @@ module Gen = struct
     in
     Arg.(required & pos 0 (some conv_fpath_dir) None & info [] ~doc ~docv:"DIR")
 
-  let cmd = Term.(const run $ dir)
+  let cmd = Term.(const Gen.run $ dir)
 
   let info = Term.info ~version:"%%VERSION%%" "gen"
 end
