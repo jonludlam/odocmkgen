@@ -28,8 +28,8 @@ val include_ : Fpath.t -> t
 
 val pp : Format.formatter -> t -> unit
 
-(** Create a [cmd]. Use {!($)} and {!($$)} to concatenate arguments. *)
 val cmd : ?stdin:string -> ?stdout:string -> ?stderr:string -> string -> cmd
+(** Create a [cmd]. Use {!($)} and {!($$)} to concatenate arguments. *)
 
 val ( $ ) : cmd -> string -> cmd
 

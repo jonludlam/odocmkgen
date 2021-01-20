@@ -129,4 +129,4 @@ let compile_deps inputs =
 let find_inputs root =
   let files = Fs_util.dir_contents_rec root in
   compile_deps (get_cm_files files |> List.map (get_cm_info root))
-  @ (get_mld_files files >>= fun mld -> [ get_mld_info root mld, [] ])
+  @ (get_mld_files files >>= fun mld -> [ (get_mld_info root mld, []) ])

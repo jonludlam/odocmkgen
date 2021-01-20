@@ -7,10 +7,7 @@ open Cmdliner
 let conv_compose ?docv parse to_string c =
   let open Arg in
   let docv = match docv with Some v -> v | None -> conv_docv c in
-  let parse v =
-    match conv_parser c v with
-    | Ok x -> parse x
-    | Error _ as e -> e
+  let parse v = match conv_parser c v with Ok x -> parse x | Error _ as e -> e
   and print fmt t = conv_printer c fmt (to_string t) in
   conv ~docv (parse, print)
 
@@ -76,10 +73,6 @@ end
 
 let _ =
   let cmds =
-    [
-      Gen.(cmd, info);
-      Generate.(cmd, info);
-      PreparePackages.(cmd, info);
-    ]
+    [ Gen.(cmd, info); Generate.(cmd, info); PreparePackages.(cmd, info) ]
   and default_cmd = Gen.(cmd, info) in
   Term.exit (Term.eval_choice default_cmd cmds)
