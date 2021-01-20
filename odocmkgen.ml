@@ -54,23 +54,6 @@ module Generate = struct
       ~doc:"Produce a makefile for generating outputs from odoc files"
 end
 
-module OpamDeps = struct
-  let deps () = 
-    let pkgs = Opam.all_opam_packages () in
-    let deps = List.map Opam.calc_deps pkgs in
-    List.iter2 (fun pkg deps ->
-      let oc = open_out (Format.asprintf "%a" Opam.pp_package pkg) in
-      let pp = Format.formatter_of_out_channel oc in
-      Opam.S.iter (fun pkg -> Format.fprintf pp "%a\n%!" Opam.pp_package pkg) deps;
-      close_out oc
-      ) pkgs deps
-
-  let cmd = Term.(const deps $ const ())
-
-  let info = Term.info "deps" ~doc:"Lists the transitive closure of the deps of the specified package"
-
-end
-
 module PreparePackages = struct
   let packages =
     let doc = "The list of findlib packages to use." in
@@ -96,7 +79,6 @@ let _ =
     [
       Gen.(cmd, info);
       Generate.(cmd, info);
-      OpamDeps.(cmd, info);
       PreparePackages.(cmd, info);
     ]
   and default_cmd = Gen.(cmd, info) in
