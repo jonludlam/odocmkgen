@@ -42,27 +42,24 @@ module Gen = struct
         rule [ Fpath.v "odocls" ] [ cmd "mkdir" $ "odocls" ];
       ]
 
-  let run whitelist roots =
-    let inputs = Inputs.find_inputs ~whitelist roots in
+  let run dir =
+    let inputs = Inputs.find_inputs dir in
     let makefile =
       let open Makefile in
       concat [ prelude; Compile.gen inputs; Link.gen inputs ]
     in
     Format.printf "%a\n" Makefile.pp makefile
 
-  let whitelist =
-    Arg.(value & opt (list string) [] & info [ "w"; "whitelist" ])
-
-  let dirs =
+  let dir =
     let doc =
-      "Path to libraries. They can be found by querying $(b,ocamlfind query -r \
-       my_package)."
+      "Input directory tree. This tree can be prepared with the \
+       $(b,prepare-package) command."
     in
-    Arg.(value & pos_all conv_fpath_dir [] & info [] ~doc ~docv:"DIR")
+    Arg.(required & pos 0 (some conv_fpath_dir) None & info [] ~doc ~docv:"DIR")
 
-  let cmd = Term.(const run $ whitelist $ dirs)
+  let cmd = Term.(const run $ dir)
 
-  let info = Term.info ~version:"%%VERSION%%" "odocmkgen"
+  let info = Term.info ~version:"%%VERSION%%" "gen"
 end
 
 module Generate = struct
