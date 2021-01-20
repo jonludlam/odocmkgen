@@ -2,11 +2,11 @@ The driver works on compiled files:
 
   $ ocamlc -I b -I a b/b.mli b/b.ml a/a.mli a/a.ml
 
-  $ odocmkgen -- a b > Makefile
-  Warning, couldn't find dep CamlinternalFormatBasics of file a/a.cmi
-  Warning, couldn't find dep Stdlib of file a/a.cmi
-  Warning, couldn't find dep CamlinternalFormatBasics of file b/b.cmi
-  Warning, couldn't find dep Stdlib of file b/b.cmi
+  $ odocmkgen gen . > Makefile
+  Warning, couldn't find dep CamlinternalFormatBasics of file ./b/b.cmi
+  Warning, couldn't find dep Stdlib of file ./b/b.cmi
+  Warning, couldn't find dep CamlinternalFormatBasics of file ./a/a.cmi
+  Warning, couldn't find dep Stdlib of file ./a/a.cmi
 
   $ make
   'mkdir' 'odocs'

@@ -1,4 +1,5 @@
 open Listm
+open Util
 
 let output_dir = function `Html -> "html" | `Latex -> "latex" | `Man -> "man"
 
@@ -11,7 +12,7 @@ let make_target = function `Html -> "html" | `Latex -> "latex" | `Man -> "man"
 
 let mk_pkg target path =
   let files =
-    Inputs.find_files path >>= fun p ->
+    Fs_util.dir_contents_rec path >>= fun p ->
     if Fpath.has_ext ".odocl" p then [ p ] else []
   in
   List.map
