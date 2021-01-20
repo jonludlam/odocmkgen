@@ -44,7 +44,6 @@ module Gen = struct
 
   let run dir =
     let inputs = Inputs.find_inputs dir in
-    let inputs = Inputs.compile_deps inputs in
     let makefile =
       let open Makefile in
       concat [ prelude; Compile.gen inputs; Link.gen inputs ]

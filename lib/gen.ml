@@ -1,6 +1,5 @@
 let run root =
   let inputs = Inputs.find_inputs root in
-  let inputs = Inputs.compile_deps inputs in
   let oc = open_out "Makefile.gen" in
   let fmt = Format.formatter_of_out_channel oc in
   Fun.protect
