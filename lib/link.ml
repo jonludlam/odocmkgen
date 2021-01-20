@@ -6,10 +6,11 @@ open Util
 let is_hidden s =
   let len = String.length s in
   let rec aux i =
-      if i > len - 2 then false else
-      if s.[i] = '_' && s.[i + 1] = '_' then true
-      else aux (i + 1)
-  in aux 0
+    if i > len - 2 then false
+    else if s.[i] = '_' && s.[i + 1] = '_' then true
+    else aux (i + 1)
+  in
+  aux 0
 
 let gen_input ~packages ~package_deps (inp, _) =
   let deps_dirs =

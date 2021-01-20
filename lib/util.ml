@@ -43,16 +43,16 @@ module Fs_util = struct
 
   let is_dir x = Sys.is_directory (Fpath.to_string x)
 
-let dir_contents_rec dir =
-  let rec loop acc dir =
-    Sys.readdir (Fpath.to_string dir)
-    |> Array.fold_left
-         (fun acc fname ->
-           let p = Fpath.( / ) dir fname in
-           if is_dir p then loop acc p else p :: acc)
-         acc
-  in
-  List.sort Fpath.compare (loop [] dir)
+  let dir_contents_rec dir =
+    let rec loop acc dir =
+      Sys.readdir (Fpath.to_string dir)
+      |> Array.fold_left
+           (fun acc fname ->
+             let p = Fpath.( / ) dir fname in
+             if is_dir p then loop acc p else p :: acc)
+           acc
+    in
+    List.sort Fpath.compare (loop [] dir)
 
   let dir_exists x =
     let p = Fpath.to_string x in
