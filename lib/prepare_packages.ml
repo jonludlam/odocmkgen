@@ -6,9 +6,8 @@ open Util
 let copy_file ~dst ~src =
   Format.eprintf "Copy '%a' -> '%a'\n" Fpath.pp src Fpath.pp dst;
   ignore
-    (Process_util.lines_of_process
-       (Filename.quote_command "cp"
-          [ Fpath.to_string src; Fpath.to_string dst ]))
+    (Process_util.lines_of_process "cp"
+       [ Fpath.to_string src; Fpath.to_string dst ])
 
 (** Copy files from [src_dir] that satisfy [p] to [dst_dir].
     Create [dst_dir] if needed. *)
@@ -50,11 +49,17 @@ let prepare_package dst_dir path =
       ()
 
 let ocamlfind_query packages =
-  let cmd = Filename.quote_command "ocamlfind" ("query" :: "-r" :: packages) in
-  Process_util.lines_of_process cmd
-  |> (* Sort to ensure reproducibility and remove duplicates just in case. *)
-  List.sort_uniq String.compare
-  |> List.map Fpath.v
+  match
+    Process_util.lines_of_process "ocamlfind" ("query" :: "-r" :: packages)
+  with
+  | Ok lines ->
+      (* Sort to ensure reproducibility and remove duplicates just in case. *)
+      Ok (List.map Fpath.v (List.sort_uniq String.compare lines))
+  | Error _ -> Error ()
 
 let run out packages =
-  List.iter (prepare_package (Fpath.v out)) (ocamlfind_query packages)
+  match ocamlfind_query packages with
+  | Ok paths -> List.iter (prepare_package (Fpath.v out)) paths
+  | Error () ->
+      Format.eprintf "Package lookup failed.\n";
+      exit 2

@@ -14,18 +14,6 @@ let conv_compose ?docv parse to_string c =
 (** Like [Cmdliner.Arg.dir] but return a [Fpath.t] *)
 let conv_fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir
 
-(* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
-let read_lib_dir () =
-  match Util.Process_util.lines_of_process "ocamlfind printconf path" with
-  | [ base_dir ] -> base_dir
-  | _ ->
-      Format.eprintf "Failed to find ocaml lib path";
-      exit 1
-
-let read_doc_dir () =
-  let dir = read_lib_dir () in
-  Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
-
 module Gen = struct
   let dir =
     let doc =
