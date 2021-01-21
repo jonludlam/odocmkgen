@@ -13,21 +13,24 @@ let compile_deps file =
     | [ c_unit_name; c_digest ] -> [ { c_unit_name; c_digest } ]
     | _ -> []
   in
-  Process_util.lines_of_process
-    (Format.asprintf "odoc compile-deps %a" Fpath.pp file)
-  >>= process_line
+  match
+    Process_util.lines_of_process "odoc"
+      [ "compile-deps"; Fpath.to_string file ]
+  with
+  | Ok lines -> lines >>= process_line
+  | Error _ -> []
 
 let generate_targets odocl ty =
   let open Process_util in
-  match ty with
-  | `Html ->
-      lines_of_process
-        (Format.asprintf "odoc html-targets %a --output-dir html" Fpath.pp
-           odocl)
-  | `Latex ->
-      lines_of_process
-        (Format.asprintf "odoc latex-targets %a --output-dir latex" Fpath.pp
-           odocl)
-  | `Man ->
-      lines_of_process
-        (Format.asprintf "odoc man-targets %a --output-dir man" Fpath.pp odocl)
+  let odocl = Fpath.to_string odocl in
+  let subcmd, output_dir =
+    match ty with
+    | `Html -> ("html-targets", "html")
+    | `Latex -> ("latex-targets", "latex")
+    | `Man -> ("man-targets", "man")
+  in
+  match
+    lines_of_process "odoc" [ subcmd; odocl; "--output-dir"; output_dir ]
+  with
+  | Ok lines -> lines
+  | Error _ -> (* ignore errors *) []
