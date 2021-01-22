@@ -94,6 +94,8 @@ let split_packages inputs =
 let segs_of_path p =
   List.filter (fun s -> (not (Fpath.is_rel_seg s)) && s <> "") (Fpath.segs p)
 
+let compile_rule_of_segs segs = "compile-" ^ String.concat "-" segs
+
 module DigestMap = Map.Make (Digest)
 
 (** Compute direct compile-dependencies for a list of inputs.

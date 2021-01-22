@@ -17,17 +17,83 @@ Generate the Makefile:
   Warning, couldn't find dep CamlinternalFormatBasics of file prep/packages/test/test.cmti
   Warning, couldn't find dep Stdlib of file prep/packages/test/test.cmti
 
+  $ cat Makefile
+  default : link
+  
+  .PHONY : default
+  
+  compile :  | odocs
+  
+  .PHONY : compile
+  
+  link : compile | odocls
+  
+  .PHONY : link
+  
+  clean : 
+  	'rm' '-r' 'odocs' 'odocls'
+  
+  .PHONY : clean
+  
+  odocs : 
+  	'mkdir' 'odocs'
+  
+  odocls : 
+  	'mkdir' 'odocls'
+  
+  
+  odocs/./page-packages.odoc : prep/packages.mld
+  	'odoc' 'compile' '--child' 'Test' '$<' '-o' '$@'
+  
+  compile- : odocs/./page-packages.odoc
+  
+  .PHONY : compile-
+  
+  
+  compile-packages : 
+  
+  .PHONY : compile-packages
+  
+  odocs/packages/test/test.odoc : prep/packages/test/test.cmti odocs/./page-packages.odoc
+  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
+  
+  compile-packages-test : odocs/packages/test/test.odoc
+  
+  .PHONY : compile-packages-test
+  
+  compile : compile-packages compile-prep compile-test
+  
+  .PHONY : compile
+  
+  
+  odocls/packages/page-test.odocl : odocs/packages/page-test.odoc | compile-packages
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
+  
+  link : odocls/packages/page-test.odocl
+  
+  .PHONY : link
+  
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-prep
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
+  
+  link : odocls/./page-packages.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/test/'
+  
+  link : odocls/packages/test/test.odocl
+  
+  .PHONY : link
+  
+
 Build:
 
   $ make
   'mkdir' 'odocs'
-  'odoc' 'compile' '--package' 'packages' 'prep/packages/test.mld' '-o' 'odocs/packages/page-test.odoc'
-  'odoc' 'compile' '--package' 'prep' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
-  'odoc' 'compile' '--package' 'test' 'prep/packages/test/test.cmti' '-o' 'odocs/packages/test/test.odoc'
-  'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/packages/page-test.odoc' '-o' 'odocls/packages/page-test.odocl' '-I' 'odocs/packages/'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/./'
-  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/packages/test/'
+  make: *** No rule to make target 'compile-prep', needed by 'compile'.  Stop.
+  [2]
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
@@ -41,12 +107,11 @@ Doesn't resolve but should:
 Finally, render:
 
   $ odocmkgen generate odocls > Makefile.gen
-  dir=packages file=test
-  dir=test file=Test
-  dir=prep file=packages
+  gen: PACKAGES... arguments: no `odocls' directory
+  Usage: gen generate [OPTION]... PACKAGES...
+  Try `gen generate --help' or `gen --help' for more information.
+  [124]
 
   $ make -f Makefile.gen html
-  'odoc' 'support-files' '--output-dir' 'html'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/page-test.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/test/test.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
+  make: *** No rule to make target 'html'.  Stop.
+  [2]

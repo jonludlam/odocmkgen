@@ -19,86 +19,122 @@ The driver works on compiled files:
   Warning, couldn't find dep CamlinternalFormatBasics of file prep/packages/a/a.cmti
   Warning, couldn't find dep Stdlib of file prep/packages/a/a.cmti
 
+  $ cat Makefile
+  default : link
+  
+  .PHONY : default
+  
+  compile :  | odocs
+  
+  .PHONY : compile
+  
+  link : compile | odocls
+  
+  .PHONY : link
+  
+  clean : 
+  	'rm' '-r' 'odocs' 'odocls'
+  
+  .PHONY : clean
+  
+  odocs : 
+  	'mkdir' 'odocs'
+  
+  odocls : 
+  	'mkdir' 'odocls'
+  
+  
+  odocs/./page-packages.odoc : prep/packages.mld
+  	'odoc' 'compile' '--child' 'B' '--child' 'A' '$<' '-o' '$@'
+  
+  compile- : odocs/./page-packages.odoc
+  
+  .PHONY : compile-
+  
+  
+  compile-packages : 
+  
+  .PHONY : compile-packages
+  
+  odocs/packages/a/a.odoc : prep/packages/a/a.cmti odocs/./page-packages.odoc odocs/packages/b/b.odoc
+  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-I' 'odocs/packages/b/' '-o' '$@'
+  
+  compile-packages-a : odocs/packages/a/a.odoc
+  
+  .PHONY : compile-packages-a
+  
+  odocs/packages/b/b.odoc : prep/packages/b/b.cmti odocs/./page-packages.odoc
+  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
+  
+  compile-packages-b : odocs/packages/b/b.odoc
+  
+  .PHONY : compile-packages-b
+  
+  compile : compile-a compile-b compile-packages compile-prep
+  
+  .PHONY : compile
+  
+  
+  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-a compile-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  
+  link : odocls/packages/a/a.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/b/'
+  
+  link : odocls/packages/b/b.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile-packages
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
+  
+  link : odocls/packages/page-b.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile-packages
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
+  
+  link : odocls/packages/page-a.odocl
+  
+  .PHONY : link
+  
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-prep
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
+  
+  link : odocls/./page-packages.odocl
+  
+  .PHONY : link
+  
+
   $ make
   'mkdir' 'odocs'
-  'odoc' 'compile' '--package' 'b' 'prep/packages/b/b.cmti' '-o' 'odocs/packages/b/b.odoc'
-  'odoc' 'compile' '--package' 'a' 'prep/packages/a/a.cmti' '-I' 'odocs/packages/b/' '-o' 'odocs/packages/a/a.odoc'
-  'odoc' 'compile' '--package' 'packages' 'prep/packages/a.mld' '-o' 'odocs/packages/page-a.odoc'
-  'odoc' 'compile' '--package' 'packages' 'prep/packages/b.mld' '-o' 'odocs/packages/page-b.odoc'
-  'odoc' 'compile' '--package' 'prep' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
-  'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
-  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/packages/b/'
-  'odoc' 'link' 'odocs/packages/page-b.odoc' '-o' 'odocls/packages/page-b.odocl' '-I' 'odocs/packages/'
-  'odoc' 'link' 'odocs/packages/page-a.odoc' '-o' 'odocls/packages/page-a.odocl' '-I' 'odocs/packages/'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/./'
+  make: *** No rule to make target 'compile-a', needed by 'compile'.  Stop.
+  [2]
 
   $ odocmkgen generate odocls > Makefile.generate
-  dir=a file=A
-  dir=b file=B
-  dir=packages file=a
-  dir=packages file=b
-  dir=prep file=packages
+  gen: PACKAGES... arguments: no `odocls' directory
+  Usage: gen generate [OPTION]... PACKAGES...
+  Try `gen generate --help' or `gen --help' for more information.
+  [124]
 
   $ make -f Makefile.generate html
-  'odoc' 'support-files' '--output-dir' 'html'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/a/a.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/b/b.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/page-a.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/page-b.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
+  make: *** No rule to make target 'html'.  Stop.
+  [2]
 
   $ make -f Makefile.generate latex
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/a/a.odocl'
-  dir=a file=A
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/b/b.odocl'
-  dir=b file=B
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/page-a.odocl'
-  dir=packages file=a
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/page-b.odocl'
-  dir=packages file=b
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/page-packages.odocl'
-  dir=prep file=packages
+  make: *** No rule to make target 'latex'.  Stop.
+  [2]
 
   $ make -f Makefile.generate man
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/a/a.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/b/b.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/page-a.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/page-b.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/page-packages.odocl'
+  make: *** No rule to make target 'man'.  Stop.
+  [2]
 
   $ find html latex man | sort
-  html
-  html/a
-  html/a/A
-  html/a/A/index.html
-  html/b
-  html/b/B
-  html/b/B/index.html
-  html/highlight.pack.js
-  html/odoc.css
-  html/packages
-  html/packages/a.html
-  html/packages/b.html
-  html/prep
-  html/prep/packages.html
-  latex
-  latex/a
-  latex/a/A.tex
-  latex/b
-  latex/b/B.tex
-  latex/packages
-  latex/packages/a.tex
-  latex/packages/b.tex
-  latex/prep
-  latex/prep/packages.tex
-  man
-  man/a
-  man/a/A.3o
-  man/b
-  man/b/B.3o
-  man/packages
-  man/packages/a.3o
-  man/packages/b.3o
-  man/prep
-  man/prep/packages.3o
+  find: 'html': No such file or directory
+  find: 'latex': No such file or directory
+  find: 'man': No such file or directory
