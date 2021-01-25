@@ -130,3 +130,59 @@ let find_inputs root =
   let files = Fs_util.dir_contents_rec root in
   compile_deps (get_cm_files files |> List.map (get_cm_info root))
   @ (get_mld_files files >>= fun mld -> [ (get_mld_info root mld, []) ])
+
+(** An input and its compile-dependencies *)
+type with_deps = t * t list
+
+type tree = {
+  inputs : with_deps list;
+  parent_page : t option;
+  childs : (string * tree) list;
+}
+
+(** Turn a list of path into a tree. The second component is passed as-is. *)
+let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
+    [ `N of 'a list * (string * 'b) list ] as 'b =
+  let rec loop_child_nodes acc = function
+    | [] -> acc
+    | ([], _) :: tl -> loop_child_nodes acc tl
+    | (seg :: seg_tl, p) :: tl ->
+        let childs, tl = loop_same_seg [ (seg_tl, p) ] seg tl in
+        loop_child_nodes ((seg, loop_node childs) :: acc) tl
+  and loop_node = function
+    | ([], direct) :: childs -> `N (direct, loop_child_nodes [] childs)
+    | childs -> `N ([], loop_child_nodes [] childs)
+  and loop_same_seg acc seg = function
+    | (seg' :: seg_tl, p) :: tl when seg = seg' ->
+        loop_same_seg ((seg_tl, p) :: acc) seg tl
+    | tl -> (acc, tl)
+  in
+  List.sort_uniq (fun (a, _) (b, _) -> Fpath.compare a b) paths
+  |> List.map (fun (p, inp) -> (Fpath.segs p, inp))
+  |> loop_node
+
+(** Turn a list of inputs ([with_deps]) into a tree following the directory
+    structure ([reloutpath]). Detects parent pages. See {!tree}. *)
+let make_tree inputs =
+  let module M = Fpath.Map in
+  let multi_add v vs = Some (v :: Option.value vs ~default:[]) in
+  let group_by_dir acc (({ reloutpath; _ }, _) as inp) =
+    M.update (Fpath.parent reloutpath) (multi_add inp) acc
+  in
+  let find_parent_page gp_page parent_inputs dir_name =
+    let parent_name = "page-" ^ dir_name in
+    let is_parent_page (inp, _) = inp.name = parent_name in
+    match List.find_opt is_parent_page parent_inputs with
+    | Some (p, _) -> Some p
+    | None -> gp_page
+  in
+  (* Finally construct the tree. *)
+  let rec make_tree parent_page (`N (inputs, childs)) =
+    let childs = List.map (make_child_tree parent_page inputs) childs in
+    { inputs; parent_page; childs }
+  and make_child_tree gp_page parent_inputs (dir_name, subtree) =
+    let parent_page = find_parent_page gp_page parent_inputs dir_name in
+    (dir_name, make_tree parent_page subtree)
+  in
+  M.bindings (List.fold_left group_by_dir M.empty inputs)
+  |> make_tree_from_dirs |> make_tree None
