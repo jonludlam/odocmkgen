@@ -33,19 +33,15 @@ let get_mld_files = List.filter (Fpath.has_ext ".mld")
 
 type t = {
   name : string;  (** 'Astring' *)
-  inppath : Fpath.t;  (** Path to the input file, contains [root]. *)
-  root : Fpath.t;
-      (** Root path in which this was found, e.g. /home/opam/.opam/4.10.0/lib/package_name *)
+  inppath : Fpath.t;  (** Path to the input file. *)
   reloutpath : Fpath.t;
-      (** Relative path to use for output, extension is the same as [inppath].
-          May not correspond to a input file in [root]. *)
-  package : string;  (** Package in which this file lives ("astring") *)
+      (** Relative path to use for output, extension is the same as [inppath]. *)
 }
 (** Represents the necessary information about a particular compilation unit *)
 
 let pp fmt x =
-  Format.fprintf fmt "@[<v 2>{ name: %s@,root: %a@,path: %a@,package:%s }@]"
-    x.name Fpath.pp x.root Fpath.pp x.inppath x.package
+  Format.fprintf fmt "@[<v 2>{ name: %s@,path: %a }@]"
+    x.name Fpath.pp x.inppath
 
 let input_file t = t.inppath
 
@@ -64,7 +60,6 @@ let link_target t = link_path_of_relpath (Fpath.set_ext "odocl" t.reloutpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_cm_info root inppath =
-  let package = Fpath.(basename (parent inppath)) in
   let reloutpath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
@@ -72,10 +67,9 @@ let get_cm_info root inppath =
   in
   let fname = Fpath.base reloutpath in
   let name = String.capitalize_ascii Fpath.(to_string (rem_ext fname)) in
-  { name; inppath; root; reloutpath; package }
+  { name; inppath; reloutpath }
 
 let get_mld_info root inppath =
-  let package = Fpath.(basename (parent inppath)) in
   let relpath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
@@ -86,14 +80,7 @@ let get_mld_info root inppath =
   let outfname = Fpath.v ("page-" ^ Fpath.to_string fname) in
   let name = Fpath.to_string (Fpath.rem_ext outfname) in
   let reloutpath = Fpath.append fparent outfname in
-  { name; inppath; root; reloutpath; package }
-
-let split_packages inputs =
-  let f inp = function Some lst -> Some (inp :: lst) | None -> Some [ inp ] in
-  List.fold_left
-    (fun acc (({ package; _ }, _) as inp) ->
-      StringMap.update package (f inp) acc)
-    StringMap.empty inputs
+  { name; inppath; reloutpath }
 
 (** Segs without ["."] and [".."]. *)
 let segs_of_path p =
