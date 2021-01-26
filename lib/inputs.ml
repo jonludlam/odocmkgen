@@ -90,6 +90,10 @@ let split_packages inputs =
       StringMap.update package (f inp) acc)
     StringMap.empty inputs
 
+(** Segs without ["."] and [".."]. *)
+let segs_of_path p =
+  List.filter (fun s -> (not (Fpath.is_rel_seg s)) && s <> "") (Fpath.segs p)
+
 module DigestMap = Map.Make (Digest)
 
 (** Compute direct compile-dependencies for a list of inputs.
@@ -158,7 +162,7 @@ let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
     | tl -> (acc, tl)
   in
   List.sort_uniq (fun (a, _) (b, _) -> Fpath.compare a b) paths
-  |> List.map (fun (p, inp) -> (Fpath.segs p, inp))
+  |> List.map (fun (p, inp) -> (segs_of_path p, inp))
   |> loop_node
 
 (** Turn a list of inputs ([with_deps]) into a tree following the directory
