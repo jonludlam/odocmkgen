@@ -134,11 +134,21 @@ type with_deps = t * t list
 
 type tree = {
   id : string;
-      (** Unique name derived from [reloutpath]. The root node has [id = ""]. *)
+      (** Unique name derived from [reldir]. The root node has [id = ""]. *)
+  reldir : Fpath.t;  (** Parent path of every inputs' [reloutpath]. *)
   inputs : with_deps list;
   parent_page : t option;
   childs : (string * tree) list;
 }
+
+(** Flatten a {!tree}. *)
+let fold_tree f acc tree =
+  let rec loop_node acc tree = loop_childs (f acc tree) tree.childs
+  and loop_childs acc = function
+    | [] -> acc
+    | (_, child) :: tl -> loop_childs (loop_node acc child) tl
+  in
+  loop_node acc tree
 
 (** Turn a list of path into a tree. The second component is passed as-is. *)
 let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
@@ -178,9 +188,10 @@ let make_tree inputs =
   in
   (* Finally construct the tree. *)
   let rec make_tree segs parent_page (`N (inputs, childs)) =
-    let id = String.concat "-" (List.rev segs) in
+    let id = String.concat "-" (List.rev segs)
+    and reldir = Fpath.v (String.concat Fpath.dir_sep ("." :: List.rev segs)) in
     let childs = List.map (make_child_tree segs parent_page inputs) childs in
-    { id; inputs; parent_page; childs }
+    { id; reldir; inputs; parent_page; childs }
   and make_child_tree segs gp_page parent_inputs (dir_name, subtree) =
     let parent_page = find_parent_page gp_page parent_inputs dir_name in
     (dir_name, make_tree (dir_name :: segs) parent_page subtree)

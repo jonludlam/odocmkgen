@@ -1,6 +1,7 @@
 (** Generate linking rules *)
+open Util
 
-let is_hidden s =
+let is_hidden { Inputs.name = s; _ } =
   let len = String.length s in
   let rec aux i =
     if i > len - 2 then false
@@ -9,85 +10,82 @@ let is_hidden s =
   in
   aux 0
 
-let compile_rule_of_path p =
-  Inputs.compile_rule_of_segs (Inputs.segs_of_path p)
-
-let link_inputs inputs deps_p =
-  let compile_rules = List.map compile_rule_of_path deps_p in
+let link_input ~deps target (input, _) =
   let inc_args =
     List.concat_map
-      (fun dir ->
-        [ "-I"; Fpath.to_string (Inputs.compile_path_of_relpath dir) ])
-      deps_p
+      (fun { Inputs.reldir; _ } ->
+        [ "-I"; Fpath.to_string (Inputs.compile_path_of_relpath reldir) ])
+      deps
   in
-  let link_targets = List.map Inputs.link_target inputs in
+  let compile_deps = List.map Inputs.compile_rule deps in
+  let input_file = Inputs.compile_target input in
   let open Makefile in
-  let link_input input output_file =
-    let input_file = Inputs.compile_target input in
-    rule [ output_file ] ~fdeps:[ input_file ] ~oo_deps:compile_rules
-      [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ]
-  in
-  concat
-    [
-      concat (List.map2 link_input inputs link_targets);
-      phony_rule "link" ~fdeps:link_targets [];
-    ]
+  rule [ target ] ~fdeps:[ input_file ] ~oo_deps:compile_deps
+    [ cmd "odoc" $ "link" $ "$<" $ "-o" $ "$@" $$ inc_args ]
 
-(** Compute link-dependencies by following compile-deps. The set of
-    dependencies is extended to entire directories, transitive dependencies are
-    flattened. Every paths correspond to the [reloutpath] field. *)
-let link_deps inputs =
-  let module S = Fpath.Set in
-  let module M = Fpath.Map in
-  let key inp = Fpath.parent inp.Inputs.reloutpath in
-  let path_map =
-    (* inputs grouped by [key] *)
-    let multi_add k v map =
-      M.update k (fun vs -> Some (v :: Option.value vs ~default:[])) map
-    in
-    let group_inputs acc ((inp, _) as inp') = multi_add (key inp) inp' acc in
-    List.fold_left group_inputs M.empty inputs
+let link_group ~link_deps acc tree =
+  (* Don't link hidden modules *)
+  let inputs =
+    List.filter (fun (inp, _) -> not (is_hidden inp)) tree.Inputs.inputs
   in
+  let link_targets = List.map (fun (inp, _) -> Inputs.link_target inp) inputs
+  and deps = StringMap.find tree.id link_deps in
+  let open Makefile in
+  if inputs = [] then acc
+  else
+    concat
+      [
+        acc;
+        concat (List.map2 (link_input ~deps) link_targets inputs);
+        phony_rule "link" ~fdeps:link_targets [];
+      ]
+
+(** Compute link-dependencies by following compile-deps transitively. The set of
+    dependencies is extended to entire directories. This is an approximation of
+    the actual link-dependencies. Keys and values are the "compile-" rules, see
+    {!Inputs.compile_rule_of_segs}. *)
+let compute_link_deps tree =
+  let open Inputs in
+  let module M = StringMap in
+  let module TreeSet = Set.Make (struct
+    type t = tree
+
+    let compare a b = String.compare a.id b.id
+  end) in
   let direct_map =
-    (* direct dependencies *)
-    let acc_deps_p acc dep = S.add (key dep) acc in
+    let tree_of_input =
+      (* Map inputs to the tree node they belong to. *)
+      let acc_inp acc (inp, _) = Fpath.Map.add inp.reloutpath tree acc in
+      let acc_inputs acc tree = List.fold_left acc_inp acc tree.inputs in
+      let map = fold_tree acc_inputs Fpath.Map.empty tree in
+      fun inp -> Fpath.Map.get inp.reloutpath map
+    in
+    (* Direct dependencies for each tree nodes, keys and values are nodes' [id]. *)
+    let acc_deps_p acc dep = TreeSet.add (tree_of_input dep) acc in
     let acc_deps acc (_, deps) = List.fold_left acc_deps_p acc deps in
-    M.map (List.fold_left acc_deps S.empty) path_map
+    fold_tree (fun acc tree -> M.add tree.id tree acc) M.empty tree
+    |> M.map (fun tree -> List.fold_left acc_deps TreeSet.empty tree.inputs)
   in
-  let rec transitive acc_map of_path =
-    match M.find of_path acc_map with
-    | Some deps_p -> (* Already visited *) (acc_map, deps_p)
+  let rec transitive acc id =
+    match M.find_opt id acc with
+    | Some deps -> (acc, deps)
     | None ->
         (* Insert a dummy value, in case of cycles, this function will return *)
-        let acc_map = M.add of_path S.empty acc_map in
-        let acc_map, deps_p =
-          let direct_deps = M.get of_path direct_map |> S.add of_path in
-          S.fold
-            (fun path (acc_map, acc_deps) ->
-              let acc_map, deps_p = transitive acc_map path in
-              (acc_map, S.union deps_p acc_deps))
-            direct_deps (acc_map, direct_deps)
+        let acc = M.add id TreeSet.empty acc in
+        let acc, deps =
+          let direct_deps = M.find id direct_map |> TreeSet.add tree in
+          (* TODO: Should we add child directories to [direct_deps] ? *)
+          TreeSet.fold
+            (fun tree (acc, deps) ->
+              let acc, deps' = transitive acc tree.id in
+              (acc, TreeSet.union deps' deps))
+            direct_deps (acc, direct_deps)
         in
-        (M.add of_path deps_p acc_map, deps_p)
+        (M.add id deps acc, deps)
   in
-  M.fold
-    (fun path inputs (acc_map, acc_inp) ->
-      let acc_map, deps_p = transitive acc_map path in
-      (acc_map, (List.map fst inputs, S.elements deps_p) :: acc_inp))
-    path_map (M.empty, [])
-  |> snd
+  M.fold (fun id _ acc -> fst (transitive acc id)) direct_map M.empty
+  |> M.map TreeSet.elements
 
-(* Ideally we would have a list of packages on which the specified package depends.
-   Here we're making an assumption - that the references in the doc comments will
-   only be referring to packages that are required to compile the modules. Other
-   drivers may be able to supply additional packages in which to find referenced
-   elements. *)
-let gen inputs =
-  inputs
-  (* Don't link hidden modules *)
-  |> List.filter (fun (inp, _) -> not (is_hidden inp.Inputs.name))
-  |> link_deps
-  |> List.fold_left
-       (fun acc (inputs, deps_p) ->
-         Makefile.concat [ acc; link_inputs inputs deps_p ])
-       (Makefile.concat [])
+let gen tree =
+  let link_deps = compute_link_deps tree in
+  Inputs.fold_tree (link_group ~link_deps) (Makefile.concat []) tree

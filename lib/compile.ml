@@ -61,19 +61,9 @@ let find_parent_childs tree =
   and loop_child parent acc (_, t) = loop_node parent acc t in
   loop_node None M.empty tree
 
-(** Flatten the tree (see {!Inputs.make_tree}). *)
-let fold_tree f acc tree =
-  let rec loop_node segs acc tree =
-    loop_childs segs (f acc tree) tree.Inputs.childs
-  and loop_childs segs acc = function
-    | [] -> acc
-    | (s, child) :: tl -> loop_childs segs (loop_node (s :: segs) acc child) tl
-  in
-  loop_node [] acc tree
-
 (** There is one per directory. *)
 let find_compile_rules tree =
-  fold_tree (fun acc tree -> Inputs.compile_rule tree :: acc) [] tree
+  Inputs.fold_tree (fun acc tree -> Inputs.compile_rule tree :: acc) [] tree
   |> List.sort_uniq String.compare
 
 let gen tree =
@@ -81,6 +71,6 @@ let gen tree =
   let open Makefile in
   concat
     [
-      fold_tree (compile_group ~parent_childs) (concat []) tree;
+      Inputs.fold_tree (compile_group ~parent_childs) (concat []) tree;
       phony_rule "compile" ~deps:(find_compile_rules tree) [];
     ]

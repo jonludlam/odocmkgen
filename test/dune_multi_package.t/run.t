@@ -75,34 +75,24 @@ The driver works on compiled files:
   .PHONY : compile
   
   
-  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/b/'
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
   
-  link : odocls/packages/b/b.odocl
+  link : odocls/./page-packages.odocl
   
   .PHONY : link
   
-  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
   
   link : odocls/packages/a/a.odocl
   
   .PHONY : link
   
-  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile-packages
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
+  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile-
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
   
-  odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile-packages
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
-  
-  link : odocls/packages/page-b.odocl odocls/packages/page-a.odocl
-  
-  .PHONY : link
-  
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
-  
-  link : odocls/./page-packages.odocl
+  link : odocls/packages/b/b.odocl
   
   .PHONY : link
   
@@ -113,29 +103,49 @@ The driver works on compiled files:
   'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/b/b.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/b/b.odoc'
   'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/a/a.cmti' '-I' 'odocs/./' '-I' 'odocs/packages/b/' '-o' 'odocs/packages/a/a.odoc'
   'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/packages/b/'
-  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
-  make: *** No rule to make target 'odocs/packages/page-b.odoc', needed by 'odocls/packages/page-b.odocl'.  Stop.
-  [2]
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.'
+  File "odocs/./page-packages.odoc":
+  Failed to resolve child reference unresolvedroot(B)
+  File "odocs/./page-packages.odoc":
+  Failed to resolve child reference unresolvedroot(A)
+  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/.'
+  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/.'
 
   $ odocmkgen generate odocls > Makefile.generate
   dir=packages file=A
   dir=packages file=B
+  dir=packages file=
 
   $ make -f Makefile.generate html
   'odoc' 'support-files' '--output-dir' 'html'
   'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/a/a.odocl'
   'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/b/b.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
 
   $ make -f Makefile.generate latex
   'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/a/a.odocl'
   dir=packages file=A
   'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/b/b.odocl'
   dir=packages file=B
+  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/page-packages.odocl'
+  dir=packages file=
 
   $ make -f Makefile.generate man
   'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/a/a.odocl'
   'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/b/b.odocl'
+  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/page-packages.odocl'
+  odoc: internal error, uncaught exception:
+        Sys_error("man/packages.3o/: Is a directory")
+        Raised by primitive operation at Stdlib.open_out_gen in file "stdlib.ml", line 324, characters 29-55
+        Called from Stdlib.open_out in file "stdlib.ml" (inlined), line 329, characters 2-74
+        Called from Odoc_odoc__Rendering.render_document.(fun) in file "src/odoc/rendering.ml", line 61, characters 15-52
+        Called from Odoc_document__Renderer.traverse.aux in file "src/document/renderer.ml", line 15, characters 4-32
+        Called from Odoc_odoc__Rendering.render_document in file "src/odoc/rendering.ml", line 57, characters 2-388
+        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 25, characters 19-24
+        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 23, characters 12-19
+        Called from Cmdliner.Term.run in file "cmdliner.ml", line 117, characters 32-39
+  make: *** [Makefile.generate:73: man/packages.3o/] Error 2
+  [2]
 
   $ find html latex man | sort
   html
@@ -146,8 +156,10 @@ The driver works on compiled files:
   html/packages/A/index.html
   html/packages/B
   html/packages/B/index.html
+  html/packages/index.html
   latex
   latex/packages
+  latex/packages.tex
   latex/packages/A.tex
   latex/packages/B.tex
   man

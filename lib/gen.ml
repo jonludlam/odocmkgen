@@ -15,6 +15,6 @@ let run dir =
   let tree = Inputs.make_tree inputs in
   let makefile =
     let open Makefile in
-    concat [ prelude; Compile.gen tree; Link.gen inputs ]
+    concat [ prelude; Compile.gen tree; Link.gen tree ]
   in
   Format.printf "%a\n" Makefile.pp makefile

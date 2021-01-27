@@ -66,24 +66,17 @@ Generate the Makefile:
   .PHONY : compile
   
   
-  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-packages-test
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/test/'
-  
-  link : odocls/packages/test/test.odocl
-  
-  .PHONY : link
-  
-  odocls/packages/page-test.odocl : odocs/packages/page-test.odoc | compile-packages
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/'
-  
-  link : odocls/packages/page-test.odocl
-  
-  .PHONY : link
-  
   odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/./'
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
   
   link : odocls/./page-packages.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
+  
+  link : odocls/packages/test/test.odocl
   
   .PHONY : link
   
@@ -95,9 +88,10 @@ Build:
   'odoc' 'compile' '--child' 'Test' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
   'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/test/test.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/test/test.odoc'
   'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/packages/test/'
-  make: *** No rule to make target 'odocs/packages/page-test.odoc', needed by 'odocls/packages/page-test.odocl'.  Stop.
-  [2]
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.'
+  File "odocs/./page-packages.odoc":
+  Failed to resolve child reference unresolvedroot(Test)
+  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/.'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
@@ -112,7 +106,9 @@ Finally, render:
 
   $ odocmkgen generate odocls > Makefile.gen
   dir=packages file=Test
+  dir=packages file=
 
   $ make -f Makefile.gen html
   'odoc' 'support-files' '--output-dir' 'html'
   'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/test/test.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
