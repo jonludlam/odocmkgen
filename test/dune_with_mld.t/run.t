@@ -61,7 +61,7 @@ Generate the Makefile:
   
   .PHONY : compile-packages-test
   
-  compile : compile-packages-page-test.mld compile-packages-test-test.cmti compile-page-packages.mld
+  compile : compile- compile-packages compile-packages-test
   
   .PHONY : compile
   
@@ -92,7 +92,11 @@ Build:
 
   $ make
   'mkdir' 'odocs'
-  make: *** No rule to make target 'compile-packages-page-test.mld', needed by 'compile'.  Stop.
+  'odoc' 'compile' '--child' 'Test' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
+  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/test/test.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/test/test.odoc'
+  'mkdir' 'odocls'
+  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/packages/test/'
+  make: *** No rule to make target 'odocs/packages/page-test.odoc', needed by 'odocls/packages/page-test.odocl'.  Stop.
   [2]
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
@@ -107,11 +111,8 @@ Doesn't resolve but should:
 Finally, render:
 
   $ odocmkgen generate odocls > Makefile.gen
-  gen: PACKAGES... arguments: no `odocls' directory
-  Usage: gen generate [OPTION]... PACKAGES...
-  Try `gen generate --help' or `gen --help' for more information.
-  [124]
+  dir=packages file=Test
 
   $ make -f Makefile.gen html
-  make: *** No rule to make target 'html'.  Stop.
-  [2]
+  'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/test/test.odocl'

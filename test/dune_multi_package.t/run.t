@@ -70,7 +70,7 @@ The driver works on compiled files:
   
   .PHONY : compile-packages-b
   
-  compile : compile-packages-a-a.cmti compile-packages-b-b.cmti compile-packages-page-a.mld compile-packages-page-b.mld compile-page-packages.mld
+  compile : compile- compile-packages compile-packages-a compile-packages-b
   
   .PHONY : compile
   
@@ -109,28 +109,48 @@ The driver works on compiled files:
 
   $ make
   'mkdir' 'odocs'
-  make: *** No rule to make target 'compile-packages-a-a.cmti', needed by 'compile'.  Stop.
+  'odoc' 'compile' '--child' 'B' '--child' 'A' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
+  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/b/b.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/b/b.odoc'
+  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/a/a.cmti' '-I' 'odocs/./' '-I' 'odocs/packages/b/' '-o' 'odocs/packages/a/a.odoc'
+  'mkdir' 'odocls'
+  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/packages/b/'
+  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  make: *** No rule to make target 'odocs/packages/page-b.odoc', needed by 'odocls/packages/page-b.odocl'.  Stop.
   [2]
 
   $ odocmkgen generate odocls > Makefile.generate
-  gen: PACKAGES... arguments: no `odocls' directory
-  Usage: gen generate [OPTION]... PACKAGES...
-  Try `gen generate --help' or `gen --help' for more information.
-  [124]
+  dir=packages file=A
+  dir=packages file=B
 
   $ make -f Makefile.generate html
-  make: *** No rule to make target 'html'.  Stop.
-  [2]
+  'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/a/a.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/b/b.odocl'
 
   $ make -f Makefile.generate latex
-  make: *** No rule to make target 'latex'.  Stop.
-  [2]
+  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/a/a.odocl'
+  dir=packages file=A
+  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/b/b.odocl'
+  dir=packages file=B
 
   $ make -f Makefile.generate man
-  make: *** No rule to make target 'man'.  Stop.
-  [2]
+  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/a/a.odocl'
+  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/b/b.odocl'
 
   $ find html latex man | sort
-  find: 'html': No such file or directory
-  find: 'latex': No such file or directory
-  find: 'man': No such file or directory
+  html
+  html/highlight.pack.js
+  html/odoc.css
+  html/packages
+  html/packages/A
+  html/packages/A/index.html
+  html/packages/B
+  html/packages/B/index.html
+  latex
+  latex/packages
+  latex/packages/A.tex
+  latex/packages/B.tex
+  man
+  man/packages
+  man/packages/A.3o
+  man/packages/B.3o

@@ -12,8 +12,9 @@ let prelude =
 
 let run dir =
   let inputs = Inputs.find_inputs dir in
+  let tree = Inputs.make_tree inputs in
   let makefile =
     let open Makefile in
-    concat [ prelude; Compile.gen inputs; Link.gen inputs ]
+    concat [ prelude; Compile.gen tree; Link.gen inputs ]
   in
   Format.printf "%a\n" Makefile.pp makefile

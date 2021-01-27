@@ -9,8 +9,11 @@ let is_hidden s =
   in
   aux 0
 
+let compile_rule_of_path p =
+  Inputs.compile_rule_of_segs (Inputs.segs_of_path p)
+
 let link_inputs inputs deps_p =
-  let compile_rules = List.map Compile.compile_rule_of_path deps_p in
+  let compile_rules = List.map compile_rule_of_path deps_p in
   let inc_args =
     List.concat_map
       (fun dir ->

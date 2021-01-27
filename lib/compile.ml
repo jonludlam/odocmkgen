@@ -72,19 +72,18 @@ let fold_tree f acc tree =
   in
   loop_node [] acc tree
 
-let compile_rule_of_path p =
-  "compile-" ^ String.concat "-" (Inputs.segs_of_path p)
+(** There is one per directory. *)
+let find_compile_rules tree =
+  fold_tree
+    (fun acc segs _ _ -> Inputs.compile_rule_of_segs segs :: acc)
+    [] tree
+  |> List.sort_uniq String.compare
 
-let gen inputs =
-  let package_rules_s =
-    List.map (fun (info, _) -> compile_rule_of_path info.Inputs.reloutpath) inputs
-    |> List.sort_uniq String.compare
-  in
-  let tree = Inputs.make_tree inputs in
+let gen tree =
   let parent_childs = find_parent_childs tree in
   let open Makefile in
   concat
     [
       fold_tree (compile_group ~parent_childs) (concat []) tree;
-      phony_rule "compile" ~deps:package_rules_s [];
+      phony_rule "compile" ~deps:(find_compile_rules tree) [];
     ]
