@@ -73,8 +73,11 @@ let compute_link_deps tree =
         (* Insert a dummy value, in case of cycles, this function will return *)
         let acc = M.add id TreeSet.empty acc in
         let acc, deps =
-          let direct_deps = M.find id direct_map |> TreeSet.add tree in
-          (* TODO: Should we add child directories to [direct_deps] ? *)
+          let direct_deps =
+            let direct_deps = M.find id direct_map in
+            fold_tree (fun acc tree -> TreeSet.add tree acc) direct_deps tree
+            (* Add the current node and direct childs to the dependencies *)
+          in
           TreeSet.fold
             (fun tree (acc, deps) ->
               let acc, deps' = transitive acc tree.id in

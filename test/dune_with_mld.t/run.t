@@ -66,15 +66,15 @@ Generate the Makefile:
   .PHONY : compile
   
   
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile- compile-packages compile-packages-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
   
   link : odocls/./page-packages.odocl
   
   .PHONY : link
   
-  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile-
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.'
+  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile- compile-packages compile-packages-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
   
   link : odocls/packages/test/test.odocl
   
@@ -88,10 +88,8 @@ Build:
   'odoc' 'compile' '--child' 'Test' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
   'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/test/test.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/test/test.odoc'
   'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.'
-  File "odocs/./page-packages.odoc":
-  Failed to resolve child reference unresolvedroot(Test)
-  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/.'
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
