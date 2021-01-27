@@ -30,9 +30,9 @@ let compile_input ~parent_childs ~parent target (input, deps) =
     ]
 
 (** Compile a group of inputs that are in the same directory. *)
-let compile_group ~parent_childs acc segs inputs parent =
+let compile_group ~parent_childs acc (tree : Inputs.tree) =
   let compile_targets =
-    List.map (fun (inp, _) -> Inputs.compile_target inp) inputs
+    List.map (fun (inp, _) -> Inputs.compile_target inp) tree.inputs
   in
   let open Makefile in
   concat
@@ -40,9 +40,9 @@ let compile_group ~parent_childs acc segs inputs parent =
       acc;
       concat
         (List.map2
-           (compile_input ~parent_childs ~parent)
-           compile_targets inputs);
-      phony_rule (Inputs.compile_rule_of_segs segs) ~fdeps:compile_targets [];
+           (compile_input ~parent_childs ~parent:tree.parent_page)
+           compile_targets tree.inputs);
+      phony_rule (Inputs.compile_rule tree) ~fdeps:compile_targets [];
     ]
 
 (** The list of childs per parent. The keys are parent's [reloutpath]. *)
@@ -64,8 +64,7 @@ let find_parent_childs tree =
 (** Flatten the tree (see {!Inputs.make_tree}). *)
 let fold_tree f acc tree =
   let rec loop_node segs acc tree =
-    let acc = f acc (List.rev segs) tree.Inputs.inputs tree.parent_page in
-    loop_childs segs acc tree.childs
+    loop_childs segs (f acc tree) tree.Inputs.childs
   and loop_childs segs acc = function
     | [] -> acc
     | (s, child) :: tl -> loop_childs segs (loop_node (s :: segs) acc child) tl
@@ -74,9 +73,7 @@ let fold_tree f acc tree =
 
 (** There is one per directory. *)
 let find_compile_rules tree =
-  fold_tree
-    (fun acc segs _ _ -> Inputs.compile_rule_of_segs segs :: acc)
-    [] tree
+  fold_tree (fun acc tree -> Inputs.compile_rule tree :: acc) [] tree
   |> List.sort_uniq String.compare
 
 let gen tree =

@@ -129,10 +129,12 @@ let find_inputs root =
   compile_deps (get_cm_files files |> List.map (get_cm_info root))
   @ (get_mld_files files >>= fun mld -> [ (get_mld_info root mld, []) ])
 
-(** An input and its compile-dependencies *)
 type with_deps = t * t list
+(** An input and its compile-dependencies *)
 
 type tree = {
+  id : string;
+      (** Unique name derived from [reloutpath]. The root node has [id = ""]. *)
   inputs : with_deps list;
   parent_page : t option;
   childs : (string * tree) list;
@@ -175,12 +177,17 @@ let make_tree inputs =
     | None -> gp_page
   in
   (* Finally construct the tree. *)
-  let rec make_tree parent_page (`N (inputs, childs)) =
-    let childs = List.map (make_child_tree parent_page inputs) childs in
-    { inputs; parent_page; childs }
-  and make_child_tree gp_page parent_inputs (dir_name, subtree) =
+  let rec make_tree segs parent_page (`N (inputs, childs)) =
+    let id = String.concat "-" (List.rev segs) in
+    let childs = List.map (make_child_tree segs parent_page inputs) childs in
+    { id; inputs; parent_page; childs }
+  and make_child_tree segs gp_page parent_inputs (dir_name, subtree) =
     let parent_page = find_parent_page gp_page parent_inputs dir_name in
-    (dir_name, make_tree parent_page subtree)
+    (dir_name, make_tree (dir_name :: segs) parent_page subtree)
   in
   M.bindings (List.fold_left group_by_dir M.empty inputs)
-  |> make_tree_from_dirs |> make_tree None
+  |> make_tree_from_dirs |> make_tree [] None
+
+(** The name of phony rules for compiling every units in a directory. These
+    rules are defined by [Compile] and used by [Link]. *)
+let compile_rule tree = "compile-" ^ tree.id
