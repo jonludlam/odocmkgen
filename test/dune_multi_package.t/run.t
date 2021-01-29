@@ -80,32 +80,32 @@ The driver works on compiled files:
   .PHONY : compile
   
   
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile- compile-packages compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-packages compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
   
   link : odocls/./page-packages.odocl
   
   .PHONY : link
   
-  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile- compile-packages compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
   
-  odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile- compile-packages compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
   
   link : odocls/packages/page-b.odocl odocls/packages/page-a.odocl
   
   .PHONY : link
   
-  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile- compile-packages compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  odocls/packages/a/a.odocl : odocs/packages/a/a.odoc | compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/b/'
   
   link : odocls/packages/a/a.odocl
   
   .PHONY : link
   
-  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc | compile- compile-packages compile-packages-a compile-packages-b
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  odocls/packages/b/b.odocl : odocs/packages/b/b.odoc
+  	'odoc' 'link' '$<' '-o' '$@'
   
   link : odocls/packages/b/b.odocl
   
@@ -120,11 +120,11 @@ The driver works on compiled files:
   'odoc' 'compile' '--parent' 'page-b' 'prep/packages/b/b.cmti' '-I' 'odocs/packages/' '-o' 'odocs/packages/b/b.odoc'
   'odoc' 'compile' '--parent' 'page-a' 'prep/packages/a/a.cmti' '-I' 'odocs/packages/' '-I' 'odocs/packages/b/' '-o' 'odocs/packages/a/a.odoc'
   'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/page-b.odoc' '-o' 'odocls/packages/page-b.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/page-a.odoc' '-o' 'odocls/packages/page-a.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/packages/' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  'odoc' 'link' 'odocs/packages/page-b.odoc' '-o' 'odocls/packages/page-b.odocl' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  'odoc' 'link' 'odocs/packages/page-a.odoc' '-o' 'odocls/packages/page-a.odocl' '-I' 'odocs/packages/a/' '-I' 'odocs/packages/b/'
+  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/packages/b/'
+  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl'
 
   $ odocmkgen generate odocls > Makefile.generate
   dir=packages/a file=A

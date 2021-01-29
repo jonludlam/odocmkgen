@@ -68,22 +68,22 @@ Generate the Makefile:
   .PHONY : compile
   
   
-  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile- compile-packages compile-packages-test
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  odocls/./page-packages.odocl : odocs/./page-packages.odoc | compile-packages compile-packages-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/' '-I' 'odocs/packages/test/'
   
   link : odocls/./page-packages.odocl
   
   .PHONY : link
   
-  odocls/packages/page-test.odocl : odocs/packages/page-test.odoc | compile- compile-packages compile-packages-test
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  odocls/packages/page-test.odocl : odocs/packages/page-test.odoc | compile-packages-test
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/packages/test/'
   
   link : odocls/packages/page-test.odocl
   
   .PHONY : link
   
-  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc | compile- compile-packages compile-packages-test
-  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  odocls/packages/test/test.odocl : odocs/packages/test/test.odoc
+  	'odoc' 'link' '$<' '-o' '$@'
   
   link : odocls/packages/test/test.odocl
   
@@ -98,9 +98,9 @@ Build:
   'odoc' 'compile' '--parent' 'page-packages' '--child' 'Test' 'prep/packages/test.mld' '-I' 'odocs/./' '-o' 'odocs/packages/page-test.odoc'
   'odoc' 'compile' '--parent' 'page-test' 'prep/packages/test/test.cmti' '-I' 'odocs/packages/' '-o' 'odocs/packages/test/test.odoc'
   'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
-  'odoc' 'link' 'odocs/packages/page-test.odoc' '-o' 'odocls/packages/page-test.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
-  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/packages/' '-I' 'odocs/packages/test/'
+  'odoc' 'link' 'odocs/packages/page-test.odoc' '-o' 'odocls/packages/page-test.odocl' '-I' 'odocs/packages/test/'
+  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 

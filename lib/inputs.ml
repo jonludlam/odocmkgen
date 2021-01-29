@@ -190,7 +190,14 @@ let make_tree inputs =
   (* Finally construct the tree. *)
   let rec make_tree segs parent_page (`N (inputs, childs)) =
     let id = String.concat "-" (List.rev segs)
-    and reldir = Fpath.v (String.concat Fpath.dir_sep ("." :: List.rev segs)) in
+    and reldir =
+      (* This should be equal to [Fpath.parent] of inputs. *)
+      if segs = [] then Fpath.v "./"
+      else Fpath.v (String.concat Fpath.dir_sep (List.rev ("" :: segs)))
+    in
+    List.iter
+      (fun (inp, _) -> assert (reldir = Fpath.parent inp.reloutpath))
+      inputs;
     let childs = List.map (make_child_tree segs parent_page inputs) childs in
     { id; reldir; inputs; parent_page; childs }
   and make_child_tree segs gp_page parent_inputs (dir_name, subtree) =
@@ -203,3 +210,20 @@ let make_tree inputs =
 (** The name of phony rules for compiling every units in a directory. These
     rules are defined by [Compile] and used by [Link]. *)
 let compile_rule tree = "compile-" ^ tree.id
+
+(** The list of childs per parent. The keys are parent's [reloutpath]. *)
+let find_parent_childs tree =
+  let module M = Fpath.Map in
+  let ( ||| ) a b = match a with Some _ -> a | None -> b in
+  let add_childs childs acc = function
+    | Some parent ->
+        let update_childs c' = Some (childs @ Option.value ~default:[] c') in
+        M.update parent.reloutpath update_childs acc
+    | None -> acc
+  in
+  let rec loop_node parent acc t =
+    let parent = t.parent_page ||| parent in
+    let acc = add_childs (List.map fst t.inputs) acc parent in
+    List.fold_left (loop_child parent) acc t.childs
+  and loop_child parent acc (_, t) = loop_node parent acc t in
+  loop_node None M.empty tree

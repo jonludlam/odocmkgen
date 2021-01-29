@@ -6,9 +6,10 @@ let compile_input ~parent_childs ~parent target (input, deps) =
     | None -> ([], [])
   in
   let child_args =
+    (* --child args. Computed by {!Inputs.find_parent_childs}. *)
     Fpath.Map.find input.Inputs.reloutpath parent_childs
     |> Option.value ~default:[]
-    |> List.concat_map (fun (c, _) -> [ "--child"; c.Inputs.name ])
+    |> List.concat_map (fun c -> [ "--child"; c.Inputs.name ])
   in
   (* Add the parent page to dependencies *)
   let deps_odoc = List.map Inputs.compile_target (parent_inp @ deps) in
@@ -45,30 +46,13 @@ let compile_group ~parent_childs acc (tree : Inputs.tree) =
       phony_rule (Inputs.compile_rule tree) ~fdeps:compile_targets [];
     ]
 
-(** The list of childs per parent. The keys are parent's [reloutpath]. *)
-let find_parent_childs tree =
-  let module M = Fpath.Map in
-  let ( ||| ) a b = match a with Some _ -> a | None -> b in
-  let add_childs childs acc = function
-    | Some parent ->
-        let update_childs c' = Some (childs @ Option.value ~default:[] c') in
-        M.update parent.Inputs.reloutpath update_childs acc
-    | None -> acc
-  in
-  let rec loop_node parent acc t =
-    let parent = t.Inputs.parent_page ||| parent in
-    let acc = add_childs t.inputs acc parent in
-    List.fold_left (loop_child parent) acc t.childs
-  and loop_child parent acc (_, t) = loop_node parent acc t in
-  loop_node None M.empty tree
-
 (** There is one per directory. *)
 let find_compile_rules tree =
   Inputs.fold_tree (fun acc tree -> Inputs.compile_rule tree :: acc) [] tree
   |> List.sort_uniq String.compare
 
 let gen tree =
-  let parent_childs = find_parent_childs tree in
+  let parent_childs = Inputs.find_parent_childs tree in
   let open Makefile in
   concat
     [
