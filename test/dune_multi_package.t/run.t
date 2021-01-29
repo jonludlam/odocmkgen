@@ -51,20 +51,25 @@ The driver works on compiled files:
   
   .PHONY : compile-
   
+  odocs/packages/page-b.odoc : prep/packages/b.mld odocs/./page-packages.odoc
+  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
   
-  compile-packages : 
+  odocs/packages/page-a.odoc : prep/packages/a.mld odocs/./page-packages.odoc
+  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
+  
+  compile-packages : odocs/packages/page-b.odoc odocs/packages/page-a.odoc
   
   .PHONY : compile-packages
   
-  odocs/packages/a/a.odoc : prep/packages/a/a.cmti odocs/./page-packages.odoc odocs/packages/b/b.odoc
-  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-I' 'odocs/packages/b/' '-o' '$@'
+  odocs/packages/a/a.odoc : prep/packages/a/a.cmti odocs/packages/page-a.odoc odocs/packages/b/b.odoc
+  	'odoc' 'compile' '--parent' 'page-a' '$<' '-I' 'odocs/packages/' '-I' 'odocs/packages/b/' '-o' '$@'
   
   compile-packages-a : odocs/packages/a/a.odoc
   
   .PHONY : compile-packages-a
   
-  odocs/packages/b/b.odoc : prep/packages/b/b.cmti odocs/./page-packages.odoc
-  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
+  odocs/packages/b/b.odoc : prep/packages/b/b.cmti odocs/packages/page-b.odoc
+  	'odoc' 'compile' '--parent' 'page-b' '$<' '-I' 'odocs/packages/' '-o' '$@'
   
   compile-packages-b : odocs/packages/b/b.odoc
   
@@ -79,6 +84,16 @@ The driver works on compiled files:
   	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
   
   link : odocls/./page-packages.odocl
+  
+  .PHONY : link
+  
+  odocls/packages/page-b.odocl : odocs/packages/page-b.odoc | compile- compile-packages compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  
+  odocls/packages/page-a.odocl : odocs/packages/page-a.odoc | compile- compile-packages compile-packages-a compile-packages-b
+  	'odoc' 'link' '$<' '-o' '$@' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  
+  link : odocls/packages/page-b.odocl odocls/packages/page-a.odocl
   
   .PHONY : link
   
@@ -100,65 +115,30 @@ The driver works on compiled files:
   $ make
   'mkdir' 'odocs'
   'odoc' 'compile' '--child' 'B' '--child' 'A' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
-  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/b/b.cmti' '-I' 'odocs/./' '-o' 'odocs/packages/b/b.odoc'
-  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/a/a.cmti' '-I' 'odocs/./' '-I' 'odocs/packages/b/' '-o' 'odocs/packages/a/a.odoc'
-  'mkdir' 'odocls'
-  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/a/a.odoc' '-o' 'odocls/packages/a/a.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
-  'odoc' 'link' 'odocs/packages/b/b.odoc' '-o' 'odocls/packages/b/b.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/a' '-I' 'odocs/./packages/b'
+  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/b.mld' '-I' 'odocs/./' '-o' 'odocs/packages/page-b.odoc'
+  ERROR: Specified parent is not a parent of this file
+  make: *** [Makefile:33: odocs/packages/page-b.odoc] Error 1
+  [2]
 
   $ odocmkgen generate odocls > Makefile.generate
-  dir=packages file=A
-  dir=packages file=B
-  dir=packages file=
+  gen: PACKAGES... arguments: no `odocls' directory
+  Usage: gen generate [OPTION]... PACKAGES...
+  Try `gen generate --help' or `gen --help' for more information.
+  [124]
 
   $ make -f Makefile.generate html
-  'odoc' 'support-files' '--output-dir' 'html'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/a/a.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/b/b.odocl'
-  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
+  make: *** No rule to make target 'html'.  Stop.
+  [2]
 
   $ make -f Makefile.generate latex
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/a/a.odocl'
-  dir=packages file=A
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/packages/b/b.odocl'
-  dir=packages file=B
-  'odoc' 'latex-generate' '--output-dir' 'latex' 'odocls/page-packages.odocl'
-  dir=packages file=
+  make: *** No rule to make target 'latex'.  Stop.
+  [2]
 
   $ make -f Makefile.generate man
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/a/a.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/packages/b/b.odocl'
-  'odoc' 'man-generate' '--output-dir' 'man' 'odocls/page-packages.odocl'
-  odoc: internal error, uncaught exception:
-        Sys_error("man/packages.3o/: Is a directory")
-        Raised by primitive operation at Stdlib.open_out_gen in file "stdlib.ml", line 324, characters 29-55
-        Called from Stdlib.open_out in file "stdlib.ml" (inlined), line 329, characters 2-74
-        Called from Odoc_odoc__Rendering.render_document.(fun) in file "src/odoc/rendering.ml", line 61, characters 15-52
-        Called from Odoc_document__Renderer.traverse.aux in file "src/document/renderer.ml", line 15, characters 4-32
-        Called from Odoc_odoc__Rendering.render_document in file "src/odoc/rendering.ml", line 57, characters 2-388
-        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 25, characters 19-24
-        Called from Cmdliner_term.app.(fun) in file "cmdliner_term.ml", line 23, characters 12-19
-        Called from Cmdliner.Term.run in file "cmdliner.ml", line 117, characters 32-39
-  make: *** [Makefile.generate:73: man/packages.3o/] Error 2
+  make: *** No rule to make target 'man'.  Stop.
   [2]
 
   $ find html latex man | sort
-  html
-  html/highlight.pack.js
-  html/odoc.css
-  html/packages
-  html/packages/A
-  html/packages/A/index.html
-  html/packages/B
-  html/packages/B/index.html
-  html/packages/index.html
-  latex
-  latex/packages
-  latex/packages.tex
-  latex/packages/A.tex
-  latex/packages/B.tex
-  man
-  man/packages
-  man/packages/A.3o
-  man/packages/B.3o
+  find: 'html': No such file or directory
+  find: 'latex': No such file or directory
+  find: 'man': No such file or directory

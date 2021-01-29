@@ -157,15 +157,12 @@ let fold_tree f acc tree =
 (** Turn a list of path into a tree. The second component is passed as-is. *)
 let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
     [ `N of 'a list * (string * 'b) list ] as 'b =
-  let rec loop_child_nodes acc = function
-    | [] -> acc
-    | ([], _) :: tl -> loop_child_nodes acc tl
+  let rec loop_node direct acc = function
+    | [] -> `N (direct, acc)
+    | ([], direct') :: tl -> loop_node (direct' @ direct) acc tl
     | (seg :: seg_tl, p) :: tl ->
         let childs, tl = loop_same_seg [ (seg_tl, p) ] seg tl in
-        loop_child_nodes ((seg, loop_node childs) :: acc) tl
-  and loop_node = function
-    | ([], direct) :: childs -> `N (direct, loop_child_nodes [] childs)
-    | childs -> `N ([], loop_child_nodes [] childs)
+        loop_node direct ((seg, loop_node [] [] childs) :: acc) tl
   and loop_same_seg acc seg = function
     | (seg' :: seg_tl, p) :: tl when seg = seg' ->
         loop_same_seg ((seg_tl, p) :: acc) seg tl
@@ -173,7 +170,7 @@ let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
   in
   List.sort_uniq (fun (a, _) (b, _) -> Fpath.compare a b) paths
   |> List.map (fun (p, inp) -> (segs_of_path p, inp))
-  |> loop_node
+  |> loop_node [] []
 
 (** Turn a list of inputs ([with_deps]) into a tree following the directory
     structure ([reloutpath]). Detects parent pages. See {!tree}. *)
@@ -184,8 +181,8 @@ let make_tree inputs =
     M.update (Fpath.parent reloutpath) (multi_add inp) acc
   in
   let find_parent_page gp_page parent_inputs dir_name =
-    let parent_name = "page-" ^ dir_name in
-    let is_parent_page (inp, _) = inp.name = parent_name in
+    let parent_name = dir_name ^ ".mld" in
+    let is_parent_page (inp, _) = Fpath.basename inp.inppath = parent_name in
     match List.find_opt is_parent_page parent_inputs with
     | Some (p, _) -> Some p
     | None -> gp_page
