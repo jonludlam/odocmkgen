@@ -70,14 +70,18 @@ let get_cm_info root inppath =
   { name; inppath; reloutpath }
 
 let get_mld_info root inppath =
+  let unit_name fname =
+    (* Prefix name and output file name with "page-".
+       Change '-' characters into '_'. *)
+    "page-" ^ String.concat "_" (String.split_on_char '-' fname)
+  in
   let relpath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
     | None -> failwith "odd"
   in
   let fparent, fname = Fpath.split_base relpath in
-  (* Prefix name and output file name with "page-" *)
-  let outfname = Fpath.v ("page-" ^ Fpath.to_string fname) in
+  let outfname = Fpath.v (unit_name (Fpath.to_string fname)) in
   let name = Fpath.to_string (Fpath.rem_ext outfname) in
   let reloutpath = Fpath.append fparent outfname in
   { name; inppath; reloutpath }
