@@ -56,8 +56,9 @@ let find_parent_childs tree =
     | None -> acc
   in
   let rec loop_node parent acc t =
-    let acc = add_childs t.Inputs.inputs acc parent in
-    List.fold_left (loop_child (t.parent_page ||| parent)) acc t.childs
+    let parent = t.Inputs.parent_page ||| parent in
+    let acc = add_childs t.inputs acc parent in
+    List.fold_left (loop_child parent) acc t.childs
   and loop_child parent acc (_, t) = loop_node parent acc t in
   loop_node None M.empty tree
 

@@ -43,14 +43,14 @@ Generate the Makefile:
   
   
   odocs/./page-packages.odoc : prep/packages.mld
-  	'odoc' 'compile' '--child' 'Test' '$<' '-o' '$@'
+  	'odoc' 'compile' '--child' 'page-test' '$<' '-o' '$@'
   
   compile- : odocs/./page-packages.odoc
   
   .PHONY : compile-
   
   odocs/packages/page-test.odoc : prep/packages/test.mld odocs/./page-packages.odoc
-  	'odoc' 'compile' '--parent' 'page-packages' '$<' '-I' 'odocs/./' '-o' '$@'
+  	'odoc' 'compile' '--parent' 'page-packages' '--child' 'Test' '$<' '-I' 'odocs/./' '-o' '$@'
   
   compile-packages : odocs/packages/page-test.odoc
   
@@ -94,11 +94,13 @@ Build:
 
   $ make
   'mkdir' 'odocs'
-  'odoc' 'compile' '--child' 'Test' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
-  'odoc' 'compile' '--parent' 'page-packages' 'prep/packages/test.mld' '-I' 'odocs/./' '-o' 'odocs/packages/page-test.odoc'
-  ERROR: Specified parent is not a parent of this file
-  make: *** [Makefile:33: odocs/packages/page-test.odoc] Error 1
-  [2]
+  'odoc' 'compile' '--child' 'page-test' 'prep/packages.mld' '-o' 'odocs/./page-packages.odoc'
+  'odoc' 'compile' '--parent' 'page-packages' '--child' 'Test' 'prep/packages/test.mld' '-I' 'odocs/./' '-o' 'odocs/packages/page-test.odoc'
+  'odoc' 'compile' '--parent' 'page-test' 'prep/packages/test/test.cmti' '-I' 'odocs/packages/' '-o' 'odocs/packages/test/test.odoc'
+  'mkdir' 'odocls'
+  'odoc' 'link' 'odocs/./page-packages.odoc' '-o' 'odocls/./page-packages.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  'odoc' 'link' 'odocs/packages/page-test.odoc' '-o' 'odocls/packages/page-test.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
+  'odoc' 'link' 'odocs/packages/test/test.odoc' '-o' 'odocls/packages/test/test.odocl' '-I' 'odocs/.' '-I' 'odocs/./packages' '-I' 'odocs/./packages/test'
 
   $ jq_scan_references() { jq -c '.. | .["`Reference"]? | select(.) | .[0]'; }
 
@@ -112,11 +114,12 @@ Doesn't resolve but should:
 Finally, render:
 
   $ odocmkgen generate odocls > Makefile.gen
-  gen: PACKAGES... arguments: no `odocls' directory
-  Usage: gen generate [OPTION]... PACKAGES...
-  Try `gen generate --help' or `gen --help' for more information.
-  [124]
+  dir=packages/test file=
+  dir=packages/test file=Test
+  dir=packages file=
 
   $ make -f Makefile.gen html
-  make: *** No rule to make target 'html'.  Stop.
-  [2]
+  'odoc' 'support-files' '--output-dir' 'html'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/page-test.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/packages/test/test.odocl'
+  'odoc' 'html-generate' '--output-dir' 'html' 'odocls/page-packages.odocl'
