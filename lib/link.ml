@@ -1,4 +1,5 @@
 (** Generate linking rules *)
+
 open Util
 
 let is_hidden { Inputs.name = s; _ } =
@@ -10,7 +11,7 @@ let is_hidden { Inputs.name = s; _ } =
   in
   aux 0
 
-let link_input ~deps target (input, _) =
+let link_input ~deps target input =
   let inc_args =
     List.concat_map
       (fun { Inputs.reldir; _ } ->
@@ -26,9 +27,9 @@ let link_input ~deps target (input, _) =
 let link_group ~link_deps acc tree =
   (* Don't link hidden modules *)
   let inputs =
-    List.filter (fun (inp, _) -> not (is_hidden inp)) tree.Inputs.inputs
+    List.filter (fun inp -> not (is_hidden inp)) tree.Inputs.inputs
   in
-  let link_targets = List.map (fun (inp, _) -> Inputs.link_target inp) inputs
+  let link_targets = List.map Inputs.link_target inputs
   and deps = StringMap.find tree.id link_deps in
   let open Makefile in
   if inputs = [] then acc
@@ -44,7 +45,7 @@ let link_group ~link_deps acc tree =
     dependencies is extended to entire directories. This is an approximation of
     the actual link-dependencies. Keys and values are the "compile-" rules, see
     {!Inputs.compile_rule_of_segs}. *)
-let compute_link_deps tree =
+let compute_link_deps ~compile_deps tree =
   let open Inputs in
   let module M = StringMap in
   let module TreeSet = Set.Make (struct
@@ -75,9 +76,11 @@ let compute_link_deps tree =
         | Some childs -> acc_deps acc childs
         | None -> acc
       in
-      List.fold_left
-        (fun acc (inp, deps) -> add_childs (acc_deps acc deps) inp)
-        TreeSet.empty tree.inputs
+      let acc_input acc inp =
+        let deps = Fpath.Map.get inp.Inputs.reloutpath compile_deps in
+        add_childs (acc_deps acc deps) inp
+      in
+      List.fold_left acc_input TreeSet.empty tree.inputs
     in
     fold_tree (fun acc tree -> M.add tree.id (tree_deps tree) acc) M.empty tree
   in
@@ -101,6 +104,6 @@ let compute_link_deps tree =
   M.fold (fun id _ acc -> fst (transitive acc id)) direct_map M.empty
   |> M.map TreeSet.elements
 
-let gen tree =
-  let link_deps = compute_link_deps tree in
+let gen ~compile_deps tree =
+  let link_deps = compute_link_deps ~compile_deps tree in
   Inputs.fold_tree (link_group ~link_deps) (Makefile.concat []) tree

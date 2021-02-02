@@ -94,18 +94,23 @@ let compile_rule_of_segs segs = "compile-" ^ String.concat "-" segs
 
 module DigestMap = Map.Make (Digest)
 
-(** Compute direct compile-dependencies for a list of inputs.
-    Returns the list of inputs paired with its dependencies. *)
-let compile_deps inputs =
+(** Compute compile-dependencies by querying [odoc compile-deps]. Maps inputs'
+    [reloutpath] to the list of dependencies. Parent pages are not considered. *)
+let compute_compile_deps inputs =
   let deps_and_digests =
+    (* Query [odoc compile-deps] for every inputs. *)
     List.map
       (fun inp ->
-        let deps = Odoc.compile_deps inp.inppath in
-        match List.partition (fun d -> d.Odoc.c_unit_name = inp.name) deps with
-        | [ self ], deps -> Some (self.c_digest, deps)
-        | _ ->
-            Format.eprintf "Failed to find digest for self (%s)\n%!" inp.name;
-            None)
+        if not (Fpath.mem_ext [ ".cmti"; ".cmt"; ".cmi" ] inp.inppath) then None
+        else
+          let deps = Odoc.compile_deps inp.inppath in
+          match
+            List.partition (fun d -> d.Odoc.c_unit_name = inp.name) deps
+          with
+          | [ self ], deps -> Some (self.c_digest, deps)
+          | _ ->
+              Format.eprintf "Failed to find digest for self (%s)\n%!" inp.name;
+              None)
       inputs
   in
   let inputs_by_digest =
@@ -122,25 +127,26 @@ let compile_deps inputs =
           dep.Odoc.c_unit_name Fpath.pp inp.inppath;
         None
   in
-  List.map2
-    (fun inp -> function
-      | Some (_, deps) -> (inp, List.filter_map (find_dep inp) deps)
-      | None -> (inp, []))
-    inputs deps_and_digests
+  List.fold_left2
+    (fun acc inp d ->
+      let deps =
+        match d with
+        | Some (_, deps) -> List.filter_map (find_dep inp) deps
+        | None -> []
+      in
+      Fpath.Map.add inp.reloutpath deps acc)
+    Fpath.Map.empty inputs deps_and_digests
 
 let find_inputs root =
   let files = Fs_util.dir_contents_rec root in
-  compile_deps (get_cm_files files |> List.map (get_cm_info root))
-  @ (get_mld_files files >>= fun mld -> [ (get_mld_info root mld, []) ])
-
-type with_deps = t * t list
-(** An input and its compile-dependencies *)
+  (get_cm_files files |> List.map (get_cm_info root))
+  @ (get_mld_files files |> List.map (get_mld_info root))
 
 type tree = {
   id : string;
       (** Unique name derived from [reldir]. The root node has [id = ""]. *)
   reldir : Fpath.t;  (** Parent path of every inputs' [reloutpath]. *)
-  inputs : with_deps list;
+  inputs : t list;
   parent_page : t option;
   childs : (string * tree) list;
 }
@@ -177,14 +183,14 @@ let make_tree_from_dirs (paths : (Fpath.t * 'a list) list) :
 let make_tree inputs =
   let module M = Fpath.Map in
   let multi_add v vs = Some (v :: Option.value vs ~default:[]) in
-  let group_by_dir acc (({ reloutpath; _ }, _) as inp) =
+  let group_by_dir acc ({ reloutpath; _ } as inp) =
     M.update (Fpath.parent reloutpath) (multi_add inp) acc
   in
   let find_parent_page gp_page parent_inputs dir_name =
     let parent_name = dir_name ^ ".mld" in
-    let is_parent_page (inp, _) = Fpath.basename inp.inppath = parent_name in
+    let is_parent_page inp = Fpath.basename inp.inppath = parent_name in
     match List.find_opt is_parent_page parent_inputs with
-    | Some (p, _) -> Some p
+    | Some p -> Some p
     | None -> gp_page
   in
   (* Finally construct the tree. *)
@@ -195,9 +201,7 @@ let make_tree inputs =
       if segs = [] then Fpath.v "./"
       else Fpath.v (String.concat Fpath.dir_sep (List.rev ("" :: segs)))
     in
-    List.iter
-      (fun (inp, _) -> assert (reldir = Fpath.parent inp.reloutpath))
-      inputs;
+    List.iter (fun inp -> assert (reldir = Fpath.parent inp.reloutpath)) inputs;
     let childs = List.map (make_child_tree segs parent_page inputs) childs in
     { id; reldir; inputs; parent_page; childs }
   and make_child_tree segs gp_page parent_inputs (dir_name, subtree) =
@@ -223,7 +227,7 @@ let find_parent_childs tree =
   in
   let rec loop_node parent acc t =
     let parent = t.parent_page ||| parent in
-    let acc = add_childs (List.map fst t.inputs) acc parent in
+    let acc = add_childs t.inputs acc parent in
     List.fold_left (loop_child parent) acc t.childs
   and loop_child parent acc (_, t) = loop_node parent acc t in
   loop_node None M.empty tree
