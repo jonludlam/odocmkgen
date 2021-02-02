@@ -90,7 +90,9 @@ let get_mld_info root inppath =
 let segs_of_path p =
   List.filter (fun s -> (not (Fpath.is_rel_seg s)) && s <> "") (Fpath.segs p)
 
-let compile_rule_of_segs segs = "compile-" ^ String.concat "-" segs
+(** A tree node's [id] corresponding to an input. *)
+let tree_id_of_input inp =
+  String.concat "-" (segs_of_path (Fpath.parent inp.reloutpath))
 
 module DigestMap = Map.Make (Digest)
 
@@ -145,7 +147,7 @@ let find_inputs root =
 type tree = {
   id : string;
       (** Unique name derived from [reldir]. The root node has [id = ""]. *)
-  reldir : Fpath.t;  (** Parent path of every inputs' [reloutpath]. *)
+  reldir : Fpath.t;
   inputs : t list;
   parent_page : t option;
   childs : (string * tree) list;
@@ -197,11 +199,9 @@ let make_tree inputs =
   let rec make_tree segs parent_page (`N (inputs, childs)) =
     let id = String.concat "-" (List.rev segs)
     and reldir =
-      (* This should be equal to [Fpath.parent] of inputs. *)
       if segs = [] then Fpath.v "./"
       else Fpath.v (String.concat Fpath.dir_sep (List.rev ("" :: segs)))
     in
-    List.iter (fun inp -> assert (reldir = Fpath.parent inp.reloutpath)) inputs;
     let childs = List.map (make_child_tree segs parent_page inputs) childs in
     { id; reldir; inputs; parent_page; childs }
   and make_child_tree segs gp_page parent_inputs (dir_name, subtree) =

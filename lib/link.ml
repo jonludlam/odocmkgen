@@ -43,8 +43,7 @@ let link_group ~link_deps acc tree =
 
 (** Compute link-dependencies by following compile-deps transitively. The set of
     dependencies is extended to entire directories. This is an approximation of
-    the actual link-dependencies. Keys and values are the "compile-" rules, see
-    {!Inputs.compile_rule_of_segs}. *)
+    the actual link-dependencies. Keys and values are the "compile-" rules. *)
 let compute_link_deps ~compile_deps tree =
   let open Inputs in
   let module M = StringMap in
@@ -56,16 +55,14 @@ let compute_link_deps ~compile_deps tree =
   let parent_childs = Inputs.find_parent_childs tree in
   (* Direct dependencies for each tree nodes, keys and values are nodes' [id]. *)
   let direct_map =
-    let trees_by_reldir =
+    let tree_nodes =
       (* Every tree nodes indexed by their [reldir]. *)
-      fold_tree
-        (fun acc tree -> Fpath.Map.add tree.reldir tree acc)
-        Fpath.Map.empty tree
+      fold_tree (fun acc tree -> M.add tree.id tree acc) M.empty tree
     in
     let tree_deps tree =
       let acc_deps' acc dep =
         (* Extend dependencies to entire tree nodes. *)
-        match Fpath.Map.find (Fpath.parent dep.reloutpath) trees_by_reldir with
+        match M.find_opt (Inputs.tree_id_of_input dep) tree_nodes with
         | Some tree -> TreeSet.add tree acc
         | None -> acc
       in
