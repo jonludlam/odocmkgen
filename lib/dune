@@ -1,4 +1,3 @@
 (library
  (name mkgen)
- (libraries astring compiler-libs.common unix fpath result))
-
+ (libraries unix fpath))

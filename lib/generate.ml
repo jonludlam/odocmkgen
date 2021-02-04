@@ -38,7 +38,8 @@ let prelude =
     [
       phony_rule "default" ~deps:[ "html" ] [];
       phony_rule "html" ~fdeps:[ odoc_css ] [];
-      rule [ odoc_css ] [ cmd "odoc" $ "support-files" $ "--output-dir" $ "html" ];
+      rule [ odoc_css ]
+        [ cmd "odoc" $ "support-files" $ "--output-dir" $ "html" ];
     ]
 
 let run paths =

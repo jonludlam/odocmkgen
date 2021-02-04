@@ -7,49 +7,14 @@ open Cmdliner
 let conv_compose ?docv parse to_string c =
   let open Arg in
   let docv = match docv with Some v -> v | None -> conv_docv c in
-  let parse v =
-    match conv_parser c v with
-    | Ok x -> parse x
-    | Error _ as e -> e
+  let parse v = match conv_parser c v with Ok x -> parse x | Error _ as e -> e
   and print fmt t = conv_printer c fmt (to_string t) in
   conv ~docv (parse, print)
 
 (** Like [Cmdliner.Arg.dir] but return a [Fpath.t] *)
 let conv_fpath_dir = conv_compose Fpath.of_string Fpath.to_string Arg.dir
 
-(* Just to find the location of all relevant ocaml cmt/cmti/cmis *)
-let read_lib_dir () =
-  match Util.Process_util.lines_of_process "ocamlfind printconf path" with
-  | [ base_dir ] -> base_dir
-  | _ ->
-      Format.eprintf "Failed to find ocaml lib path";
-      exit 1
-
-let read_doc_dir () =
-  let dir = read_lib_dir () in
-  Fpath.(to_string (fst (Fpath.split_base (v dir)) / "doc"))
-
 module Gen = struct
-  let prelude =
-    let open Makefile in
-    concat
-      [
-        phony_rule "default" ~deps:[ "link" ] [];
-        phony_rule "compile" ~oo_deps:[ "odocs" ] [];
-        phony_rule "link" ~deps:[ "compile" ] ~oo_deps:[ "odocls" ] [];
-        phony_rule "clean" [ cmd "rm" $ "-r" $ "odocs" $ "odocls" ];
-        rule [ Fpath.v "odocs" ] [ cmd "mkdir" $ "odocs" ];
-        rule [ Fpath.v "odocls" ] [ cmd "mkdir" $ "odocls" ];
-      ]
-
-  let run dir =
-    let inputs = Inputs.find_inputs dir in
-    let makefile =
-      let open Makefile in
-      concat [ prelude; Compile.gen inputs; Link.gen inputs ]
-    in
-    Format.printf "%a\n" Makefile.pp makefile
-
   let dir =
     let doc =
       "Input directory tree. This tree can be prepared with the \
@@ -57,7 +22,7 @@ module Gen = struct
     in
     Arg.(required & pos 0 (some conv_fpath_dir) None & info [] ~doc ~docv:"DIR")
 
-  let cmd = Term.(const run $ dir)
+  let cmd = Term.(const Gen.run $ dir)
 
   let info = Term.info ~version:"%%VERSION%%" "gen"
 end
@@ -72,23 +37,6 @@ module Generate = struct
   let info =
     Term.info "generate"
       ~doc:"Produce a makefile for generating outputs from odoc files"
-end
-
-module OpamDeps = struct
-  let deps () = 
-    let pkgs = Opam.all_opam_packages () in
-    let deps = List.map Opam.calc_deps pkgs in
-    List.iter2 (fun pkg deps ->
-      let oc = open_out (Format.asprintf "%a" Opam.pp_package pkg) in
-      let pp = Format.formatter_of_out_channel oc in
-      Opam.S.iter (fun pkg -> Format.fprintf pp "%a\n%!" Opam.pp_package pkg) deps;
-      close_out oc
-      ) pkgs deps
-
-  let cmd = Term.(const deps $ const ())
-
-  let info = Term.info "deps" ~doc:"Lists the transitive closure of the deps of the specified package"
-
 end
 
 module PreparePackages = struct
@@ -113,11 +61,6 @@ end
 
 let _ =
   let cmds =
-    [
-      Gen.(cmd, info);
-      Generate.(cmd, info);
-      OpamDeps.(cmd, info);
-      PreparePackages.(cmd, info);
-    ]
+    [ Gen.(cmd, info); Generate.(cmd, info); PreparePackages.(cmd, info) ]
   and default_cmd = Gen.(cmd, info) in
   Term.exit (Term.eval_choice default_cmd cmds)
