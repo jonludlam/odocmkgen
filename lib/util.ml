@@ -64,6 +64,18 @@ module Fs_util = struct
     if not (Sys.file_exists dir_s) then (
       mkdir_rec (Fpath.parent dir);
       Unix.mkdir dir_s 0o777 )
+
+  let read_file file =
+    let inp = open_in file in
+    let finally () = close_in inp in
+    Fun.protect ~finally (fun () ->
+        let lines = ref [] in
+        ( try
+            while true do
+              lines := input_line inp :: !lines
+            done
+          with End_of_file -> () );
+        List.rev !lines)
 end
 
 let path_of_segs segs = Fpath.v (String.concat Fpath.dir_sep segs)

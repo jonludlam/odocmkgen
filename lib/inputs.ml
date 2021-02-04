@@ -139,6 +139,27 @@ let compute_compile_deps inputs =
       Fpath.Map.add inp.reloutpath deps acc)
     Fpath.Map.empty inputs deps_and_digests
 
+(** Returns the same map as {!compute_compile_deps} but read it from a file.
+    TODO: Switch to a better format, for example sexp. *)
+let read_dep_file file inputs =
+  let module M = Fpath.Map in
+  let parse_path s = Fpath.(normalize (v s)) in
+  let parse_line line =
+    String.split_on_char ' ' line |> List.map parse_path |> function
+    | hd :: tl -> Some (hd, tl)
+    | [] -> None
+  in
+  let inputs_map =
+    List.fold_left (fun acc inp -> M.add inp.reloutpath inp acc) M.empty inputs
+  in
+  List.fold_left
+    (fun acc line ->
+      match parse_line line with
+      | Some (hd, tl) ->
+          M.add hd (List.filter_map (Fun.flip M.find inputs_map) tl) acc
+      | None -> acc)
+    M.empty (Fs_util.read_file file)
+
 let find_inputs root =
   let files = Fs_util.dir_contents_rec root in
   (get_cm_files files |> List.map (get_cm_info root))

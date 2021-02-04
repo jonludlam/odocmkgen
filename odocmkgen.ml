@@ -22,7 +22,15 @@ module Gen = struct
     in
     Arg.(required & pos 0 (some conv_fpath_dir) None & info [] ~doc ~docv:"DIR")
 
-  let cmd = Term.(const Gen.run $ dir)
+  let dep_file =
+    let doc =
+      "File specifying dependencies between compilation units. If this is not \
+       passed, dependencies will be computed by calling $(b,odoc compile-deps) \
+       for every modules."
+    in
+    Arg.(value & opt (some non_dir_file) None & info [ "dep" ] ~doc)
+
+  let cmd = Term.(const Gen.run $ dir $ dep_file)
 
   let info = Term.info ~version:"%%VERSION%%" "gen"
 end
