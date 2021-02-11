@@ -52,7 +52,7 @@ let compute_link_deps ~parent_childs ~compile_deps tree =
 
     let compare a b = String.compare a.id b.id
   end) in
-  (* Every tree nodes indexed by their [reldir]. *)
+  (* Every tree nodes indexed by their [id]. *)
   let tree_nodes =
     fold_tree (fun acc tree -> M.add tree.id tree acc) M.empty tree
   in
@@ -99,8 +99,8 @@ let compute_link_deps ~parent_childs ~compile_deps tree =
   (* Compute transitive compile-deps first *)
   M.fold (fun id _ acc -> fst (transitive acc id)) direct_map M.empty
   |> M.mapi (fun id deps ->
-         (* Add child trees if any. This is not transitive. *)
          let tree = M.find id tree_nodes in
+         (* Add child trees if any. This is not transitive. *)
          List.fold_left add_childs deps tree.inputs |> TreeSet.elements)
 
 let gen ~parent_childs ~compile_deps tree =

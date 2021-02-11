@@ -34,6 +34,9 @@ let get_mld_files = List.filter (Fpath.has_ext ".mld")
 type t = {
   name : string;  (** 'Astring' *)
   inppath : Fpath.t;  (** Path to the input file. *)
+  relinppath : Fpath.t;
+      (** Relative path to the input file from the root. Used for interpreting
+          compile-deps files. *)
   reloutpath : Fpath.t;
       (** Relative path to use for output, extension is the same as [inppath]. *)
 }
@@ -60,14 +63,14 @@ let link_target t = link_path_of_relpath (Fpath.set_ext "odocl" t.reloutpath)
 
 (* Get info given a base file (cmt, cmti or cmi) *)
 let get_cm_info root inppath =
-  let reloutpath =
+  let relinppath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
     | None -> failwith "odd"
   in
-  let fname = Fpath.base reloutpath in
+  let fname = Fpath.base relinppath in
   let name = String.capitalize_ascii Fpath.(to_string (rem_ext fname)) in
-  { name; inppath; reloutpath }
+  { name; inppath; relinppath; reloutpath = relinppath }
 
 let get_mld_info root inppath =
   let unit_name fname =
@@ -75,16 +78,16 @@ let get_mld_info root inppath =
        Change '-' characters into '_'. *)
     "page-" ^ String.concat "_" (String.split_on_char '-' fname)
   in
-  let relpath =
+  let relinppath =
     match Fpath.relativize ~root inppath with
     | Some p -> p
     | None -> failwith "odd"
   in
-  let fparent, fname = Fpath.split_base relpath in
+  let fparent, fname = Fpath.split_base relinppath in
   let outfname = Fpath.v (unit_name (Fpath.to_string fname)) in
   let name = Fpath.to_string (Fpath.rem_ext outfname) in
   let reloutpath = Fpath.append fparent outfname in
-  { name; inppath; reloutpath }
+  { name; inppath; relinppath; reloutpath }
 
 (** Segs without ["."] and [".."]. *)
 let segs_of_path p =
@@ -140,6 +143,10 @@ let compute_compile_deps inputs =
     Fpath.Map.empty inputs deps_and_digests
 
 (** Returns the same map as {!compute_compile_deps} but read it from a file.
+    Each lines is a list of paths separated by spaces. The first path of each
+    line is the target, the other paths are its dependencies. Every paths can
+    be to files or to directories, in which case they apply to every files
+    directly in that directory.
     TODO: Switch to a better format, for example sexp. *)
 let read_dep_file file inputs =
   let module M = Fpath.Map in
@@ -149,14 +156,34 @@ let read_dep_file file inputs =
     | hd :: tl -> Some (hd, tl)
     | [] -> None
   in
+  let multi_add k v m =
+    M.update k (function Some v' -> Some (v @ v') | None -> Some v) m
+  in
+  (* Normalize every paths *)
+  let norm p = Fpath.(rem_empty_seg (normalize p)) in
+  (* Every inputs indexed by their relinppath. *)
   let inputs_map =
-    List.fold_left (fun acc inp -> M.add inp.reloutpath inp acc) M.empty inputs
+    List.fold_left
+      (fun acc inp ->
+        M.add (norm inp.relinppath) [ inp ] acc
+        (* Also bind directories to inputs directly in them. *)
+        |> multi_add (norm (Fpath.parent inp.relinppath)) [ inp ])
+      M.empty inputs
+  in
+  let find_input path =
+    M.find (norm path) inputs_map |> Option.value ~default:[]
   in
   Fs_util.read_file
     (fun acc line ->
       match parse_line line with
       | Some (hd, tl) ->
-          M.add hd (List.filter_map (Fun.flip M.find inputs_map) tl) acc
+          let deps = List.concat_map find_input tl in
+          find_input hd
+          |> List.fold_left
+               (fun acc inp ->
+                 (* Make sure that keys are [reloutpath]. *)
+                 multi_add inp.reloutpath deps acc)
+               acc
       | None -> acc)
     M.empty file
 
