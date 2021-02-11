@@ -52,30 +52,22 @@ let compute_link_deps ~parent_childs ~compile_deps tree =
 
     let compare a b = String.compare a.id b.id
   end) in
+  (* Every tree nodes indexed by their [reldir]. *)
+  let tree_nodes =
+    fold_tree (fun acc tree -> M.add tree.id tree acc) M.empty tree
+  in
+  let add_corresponding_node acc inp =
+    (* Add the tree node corresponding to [inp] into [acc]. *)
+    match M.find_opt (Inputs.tree_id_of_input inp) tree_nodes with
+    | Some tree -> TreeSet.add tree acc
+    | None -> acc
+  in
   (* Direct dependencies for each tree nodes, keys and values are nodes' [id]. *)
   let direct_map =
-    let tree_nodes =
-      (* Every tree nodes indexed by their [reldir]. *)
-      fold_tree (fun acc tree -> M.add tree.id tree acc) M.empty tree
-    in
     let tree_deps tree =
-      let acc_deps' acc dep =
-        (* Extend dependencies to entire tree nodes. *)
-        match M.find_opt (Inputs.tree_id_of_input dep) tree_nodes with
-        | Some tree -> TreeSet.add tree acc
-        | None -> acc
-      in
-      let acc_deps acc deps = List.fold_left acc_deps' acc deps in
-      let add_childs acc inp =
-        (* Add childs to the set of dependency. *)
-        match Fpath.Map.find inp.reloutpath parent_childs with
-        | Some childs -> acc_deps acc childs
-        | None -> acc
-      in
       let acc_input acc inp =
-        let acc = add_childs acc inp in
         match Fpath.Map.find inp.Inputs.reloutpath compile_deps with
-        | Some deps -> acc_deps acc deps
+        | Some deps -> List.fold_left add_corresponding_node acc deps
         | None -> acc
       in
       List.fold_left acc_input TreeSet.empty tree.inputs
@@ -99,8 +91,17 @@ let compute_link_deps ~parent_childs ~compile_deps tree =
         in
         (M.add id deps acc, deps)
   in
+  let add_childs acc inp =
+    match Fpath.Map.find inp.Inputs.reloutpath parent_childs with
+    | Some childs -> List.fold_left add_corresponding_node acc childs
+    | None -> acc
+  in
+  (* Compute transitive compile-deps first *)
   M.fold (fun id _ acc -> fst (transitive acc id)) direct_map M.empty
-  |> M.map TreeSet.elements
+  |> M.mapi (fun id deps ->
+         (* Add child trees if any. This is not transitive. *)
+         let tree = M.find id tree_nodes in
+         List.fold_left add_childs deps tree.inputs |> TreeSet.elements)
 
 let gen ~parent_childs ~compile_deps tree =
   let link_deps = compute_link_deps ~parent_childs ~compile_deps tree in
