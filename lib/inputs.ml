@@ -152,13 +152,13 @@ let read_dep_file file inputs =
   let inputs_map =
     List.fold_left (fun acc inp -> M.add inp.reloutpath inp acc) M.empty inputs
   in
-  List.fold_left
+  Fs_util.read_file
     (fun acc line ->
       match parse_line line with
       | Some (hd, tl) ->
           M.add hd (List.filter_map (Fun.flip M.find inputs_map) tl) acc
       | None -> acc)
-    M.empty (Fs_util.read_file file)
+    M.empty file
 
 let find_inputs root =
   let files = Fs_util.dir_contents_rec root in

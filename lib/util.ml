@@ -65,17 +65,17 @@ module Fs_util = struct
       mkdir_rec (Fpath.parent dir);
       Unix.mkdir dir_s 0o777 )
 
-  let read_file file =
+  let read_file f acc file =
     let inp = open_in file in
     let finally () = close_in inp in
     Fun.protect ~finally (fun () ->
-        let lines = ref [] in
+        let acc = ref acc in
         ( try
             while true do
-              lines := input_line inp :: !lines
+              acc := f !acc (input_line inp)
             done
           with End_of_file -> () );
-        List.rev !lines)
+        !acc)
 end
 
 let path_of_segs segs = Fpath.v (String.concat Fpath.dir_sep segs)
