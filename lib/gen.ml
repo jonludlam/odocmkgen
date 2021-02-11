@@ -15,8 +15,8 @@ let run dir dep_file =
   let tree = Inputs.make_tree inputs in
   let compile_deps =
     match dep_file with
-    | Some f -> Inputs.read_dep_file f inputs
-    | None -> Inputs.compute_compile_deps inputs
+    | Some file -> Compute_compile_deps.from_deps_file ~file inputs
+    | None -> Compute_compile_deps.from_odoc inputs
   in
   let parent_childs = Inputs.find_parent_childs tree in
   let makefile =

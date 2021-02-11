@@ -66,9 +66,8 @@ let compute_link_deps ~parent_childs ~compile_deps tree =
   let direct_map =
     let tree_deps tree =
       let acc_input acc inp =
-        match Fpath.Map.find inp.Inputs.reloutpath compile_deps with
-        | Some deps -> List.fold_left add_corresponding_node acc deps
-        | None -> acc
+        Compile_deps.get compile_deps inp
+        |> List.fold_left add_corresponding_node acc
       in
       List.fold_left acc_input TreeSet.empty tree.inputs
     in

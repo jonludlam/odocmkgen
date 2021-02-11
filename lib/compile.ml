@@ -1,9 +1,6 @@
 (** Rules for compiling cm{t,ti,i} files into odoc files *)
 let compile_input ~compile_deps ~parent_childs ~parent target input =
-  let deps =
-    Fpath.Map.find input.Inputs.reloutpath compile_deps
-    |> Option.value ~default:[]
-  in
+  let deps = Compile_deps.get compile_deps input in
   let parent_args, parent_inp =
     match parent with
     | Some p -> ([ "--parent"; p.Inputs.name ], [ p ])
