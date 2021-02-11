@@ -18,9 +18,14 @@ let run dir dep_file =
     | Some f -> Inputs.read_dep_file f inputs
     | None -> Inputs.compute_compile_deps inputs
   in
+  let parent_childs = Inputs.find_parent_childs tree in
   let makefile =
     let open Makefile in
     concat
-      [ prelude; Compile.gen ~compile_deps tree; Link.gen ~compile_deps tree ]
+      [
+        prelude;
+        Compile.gen ~parent_childs ~compile_deps tree;
+        Link.gen ~parent_childs ~compile_deps tree;
+      ]
   in
   Format.printf "%a\n" Makefile.pp makefile

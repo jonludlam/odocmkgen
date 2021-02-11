@@ -43,8 +43,8 @@ let link_group ~link_deps acc tree =
 
 (** Compute link-dependencies by following compile-deps transitively. The set of
     dependencies is extended to entire directories. This is an approximation of
-    the actual link-dependencies. Keys and values are the "compile-" rules. *)
-let compute_link_deps ~compile_deps tree =
+    the actual link-dependencies. Keys and values are the tree IDs. *)
+let compute_link_deps ~parent_childs ~compile_deps tree =
   let open Inputs in
   let module M = StringMap in
   let module TreeSet = Set.Make (struct
@@ -52,7 +52,6 @@ let compute_link_deps ~compile_deps tree =
 
     let compare a b = String.compare a.id b.id
   end) in
-  let parent_childs = Inputs.find_parent_childs tree in
   (* Direct dependencies for each tree nodes, keys and values are nodes' [id]. *)
   let direct_map =
     let tree_nodes =
@@ -103,6 +102,6 @@ let compute_link_deps ~compile_deps tree =
   M.fold (fun id _ acc -> fst (transitive acc id)) direct_map M.empty
   |> M.map TreeSet.elements
 
-let gen ~compile_deps tree =
-  let link_deps = compute_link_deps ~compile_deps tree in
+let gen ~parent_childs ~compile_deps tree =
+  let link_deps = compute_link_deps ~parent_childs ~compile_deps tree in
   Inputs.fold_tree (link_group ~link_deps) (Makefile.concat []) tree

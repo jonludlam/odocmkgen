@@ -53,8 +53,7 @@ let find_compile_rules tree =
   Inputs.fold_tree (fun acc tree -> Inputs.compile_rule tree :: acc) [] tree
   |> List.sort_uniq String.compare
 
-let gen ~compile_deps tree =
-  let parent_childs = Inputs.find_parent_childs tree in
+let gen ~parent_childs ~compile_deps tree =
   let open Makefile in
   concat
     [
