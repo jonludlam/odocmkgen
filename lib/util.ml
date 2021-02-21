@@ -4,8 +4,9 @@ module StringMap = Map.Make (String)
 module StringSet = Set.Make (String)
 
 module Process_util = struct
-  let lines_of_process p =
-    let ic = Unix.open_process_in p in
+  let lines_of_process prog args =
+    let cmd = Filename.quote_command prog args in
+    let ic = Unix.open_process_in cmd in
     let lines =
       let rec inner acc =
         try
@@ -16,10 +17,10 @@ module Process_util = struct
       inner []
     in
     match Unix.close_process_in ic with
-    | Unix.WEXITED 0 -> lines
+    | Unix.WEXITED 0 -> Ok lines
     | _ ->
-        Format.eprintf "Command failed: %s\n" p;
-        exit 1
+        Format.eprintf "Command failed: %s\n" cmd;
+        Error lines
 end
 
 module List_util = struct
@@ -43,16 +44,16 @@ module Fs_util = struct
 
   let is_dir x = Sys.is_directory (Fpath.to_string x)
 
-let dir_contents_rec dir =
-  let rec loop acc dir =
-    Sys.readdir (Fpath.to_string dir)
-    |> Array.fold_left
-         (fun acc fname ->
-           let p = Fpath.( / ) dir fname in
-           if is_dir p then loop acc p else p :: acc)
-         acc
-  in
-  List.sort Fpath.compare (loop [] dir)
+  let dir_contents_rec dir =
+    let rec loop acc dir =
+      Sys.readdir (Fpath.to_string dir)
+      |> Array.fold_left
+           (fun acc fname ->
+             let p = Fpath.( / ) dir fname in
+             if is_dir p then loop acc p else p :: acc)
+           acc
+    in
+    List.sort Fpath.compare (loop [] dir)
 
   let dir_exists x =
     let p = Fpath.to_string x in

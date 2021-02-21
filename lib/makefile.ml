@@ -42,9 +42,9 @@ let pp_rule fmt t =
     | deps -> fprintf fmt " | %a" pp_deps deps
   in
   let pp_recipe fmt = List.iter (fprintf fmt "\t%s@\n") in
-  fprintf fmt "%a : %a%a@\n%a"
-    (pp_print_list pp_print_string)
-    t.targets pp_deps t.deps pp_oo_deps t.oo_deps pp_recipe t.recipe
+  fprintf fmt "%s : %a%a@\n%a"
+    (String.concat " " t.targets)
+    pp_deps t.deps pp_oo_deps t.oo_deps pp_recipe t.recipe
 
 let pp_include fmt p = Format.fprintf fmt "-include %s@\n" p
 

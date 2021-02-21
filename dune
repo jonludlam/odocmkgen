@@ -1,4 +1,4 @@
 (executable
  (public_name odocmkgen)
  (modules odocmkgen)
- (libraries astring compiler-libs.common unix fpath result mkgen cmdliner))
+ (libraries unix fpath mkgen cmdliner))
