@@ -229,10 +229,10 @@ module StringMap = Map.Make (String)
 
 let mld_contents mld =
   let child_format fmt = function
-    | MLDChild.CU info -> Format.fprintf fmt "{!child:%s}\n" info.name
+    | MLDChild.CU info -> Format.fprintf fmt "{!childmodule:%s}\n" info.name
     | Mld m ->
         let page = Hashtbl.find pages m in
-        Format.fprintf fmt "{!child:%s}\n" page.mldname
+        Format.fprintf fmt "{!childpage:%s}\n" page.mldname
   in
   let children =
     ChildSet.fold
@@ -340,7 +340,7 @@ let parent_mld_fragment all_infos =
         | Some p ->
             let page = Hashtbl.find pages p in
             Format.asprintf "%a" Fpath.pp page.odoc );
-      Format.asprintf "\todoc compile %a %a %s" Fpath.pp mld.mld
+      Format.asprintf "\t/usr/bin/time -l odoc compile %a %a %s" Fpath.pp mld.mld
         (fun fmt -> function None -> ()
           | Some p ->
               let page = Hashtbl.find pages p in
@@ -353,8 +353,8 @@ let parent_mld_fragment all_infos =
               (function
                 | MLDChild.Mld p ->
                     let page = Hashtbl.find pages p in
-                    Format.asprintf "--child %s" page.mldname
-                | CU p -> Format.asprintf "--child %s" p.name)
+                    Format.asprintf "--child page-%s" page.mldname
+                | CU p -> Format.asprintf "--child module-%s" p.name)
               children));
       Format.asprintf "compile : %a" Fpath.pp mld.odoc;
       Format.asprintf "%a : %a %a" Fpath.pp (odocl_file mld) Fpath.pp mld.odoc
@@ -537,7 +537,7 @@ let compile_fragment all_infos info =
         Fpath.(info.root // info.dir // info.fname)
         (String.concat " " dep_odocs);
       Format.asprintf
-        "\t%s/.opam/%s/bin/odoc compile --parent %s -I %a $< %s -o %a" home
+        "\t/usr/bin/time -l %s/.opam/%s/bin/odoc compile --parent %s -I %a $< %s -o %a" home
         ocaml_version parent_trio.mldname Fpath.pp
         (Fpath.split_base parent_trio.odoc |> fst)
         include_str Fpath.pp odoc_path;
